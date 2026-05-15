@@ -71,7 +71,6 @@ class RootApp(App):
     """
 
     BINDINGS = [
-        Binding("enter", "commit", "go", priority=True),
         Binding("right", "descend", "into"),
         Binding("left", "ascend", "up"),
         Binding("ctrl+b", "bookmark", "+bm"),
@@ -160,6 +159,15 @@ class RootApp(App):
             return
         self.query = event.value
         self._refresh()
+
+    def on_list_view_selected(self, _event: ListView.Selected) -> None:
+        # ListView raises Selected on Enter / click. Treat that as a
+        # commit, *but only when the user is on our main screen* --
+        # Textual's built-in command palette has its own list and
+        # raises its own events on a different screen, which won't
+        # reach this handler.
+        if not self._bookmark_mode:
+            self.action_commit()
 
     def on_input_submitted(self, _event: Input.Submitted) -> None:
         if self._bookmark_mode:
