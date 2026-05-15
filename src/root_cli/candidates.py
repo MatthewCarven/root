@@ -3,12 +3,14 @@
 Sources:
 - BOOKMARK : user-defined named shortcuts
 - RECENT   : frecency-tracked history
-- TREE     : children of the current browse directory (plus '..' when applicable)
+- TREE     : children of the current browse directory (plus synthetic
+             '.' and '..' rows for committing the current dir or going up)
 - SEARCH   : one-level-deep glob of the configured search_roots
 
-When the query is empty we show a friendly default view (bookmarks +
-recents + ".." (if not at filesystem root) + tree children). When the
-user types, all sources are merged, scored, and ranked together.
+When the query is empty we show the default view: '.' (commit current),
+'..' (go up, if not at root), bookmarks, recents, tree children. When
+the user types, all sources are merged, scored, and ranked together
+(the synthetic '.' and '..' rows are suppressed in search results).
 """
 from __future__ import annotations
 
@@ -54,6 +56,16 @@ class Candidate:
     def is_parent_entry(self):
         """True when this Candidate is the synthetic '..' parent row."""
         return self.source is Source.TREE and self.label == ".."
+
+    @property
+    def is_self_entry(self):
+        """True when this Candidate is the synthetic '.' (current dir) row."""
+        return self.source is Source.TREE and self.label == "."
+
+    @property
+    def is_special(self):
+        """Synthetic navigation rows that aren't user-bookmarkable."""
+        return self.is_self_entry or self.is_parent_entry
 
 
 def _tree_children(directory, show_hidden):
@@ -111,6 +123,14 @@ class CandidateContext:
 
     def _default_view(self):
         out = []
+        # '.' = commit the current browse dir. Always shown so the user
+        # can stop here after navigating with '..' or arrow-keys.
+        out.append(Candidate(path=self.cwd, source=Source.TREE, label="."))
+        # '..' = ascend (hidden at filesystem roots).
+        parent = self.cwd.parent
+        if parent != self.cwd:
+            out.append(Candidate(path=parent, source=Source.TREE, label=".."))
+        # Bookmarks.
         for name, p in self.bookmarks.items():
             out.append(Candidate(
                 path=Path(p),
@@ -118,21 +138,19 @@ class CandidateContext:
                 label=name,
                 match_fields=[str(p)],
             ))
+        # Frecent recents (skip anything already shown as a bookmark).
         for p, _s in self.history.ranked(limit=self.config.recent_limit):
             if any(c.path == p for c in out):
                 continue
             out.append(Candidate(path=p, source=Source.RECENT, label=str(p)))
-        # ".." parent entry — shown only when we're not already at the
-        # filesystem root of a drive. Path.parent returns the same path
-        # for "/" and for "C:\\", which makes this check portable.
-        parent = self.cwd.parent
-        if parent != self.cwd:
-            out.append(Candidate(path=parent, source=Source.TREE, label=".."))
+        # Tree children.
         for child in _tree_children(self.cwd, self.config.show_hidden):
             out.append(Candidate(path=child, source=Source.TREE, label=child.name))
         return out
 
     def _search(self, query):
+        # Search results never include synthetic '.' / '..' rows --
+        # they'd be confusing when the user is fuzzy-filtering by name.
         pool = []
         for name, p in self.bookmarks.items():
             pool.append(Candidate(

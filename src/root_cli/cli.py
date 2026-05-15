@@ -39,6 +39,7 @@ from root_cli.paths import (
 
 
 SUPPORTED_SHELLS = ("bash", "zsh", "fish", "powershell", "cmd")
+INSTALL_SHELLS = SUPPORTED_SHELLS + ("auto",)
 
 
 def _print_shell_wrapper(shell: str) -> int:
@@ -169,6 +170,18 @@ def _cmd_init_shell(args: argparse.Namespace) -> int:
     return _print_shell_wrapper(args.shell)
 
 
+def _cmd_install_shell(args: argparse.Namespace) -> int:
+    from root_cli.install import install  # deferred for fast --help
+
+    result = install(args.shell)
+    if result.success:
+        print("[root] installation successful.")
+        print(result.message)
+        return 0
+    print(f"[root] installation failed: {result.message}", file=sys.stderr)
+    return 1
+
+
 def _cmd_which(_args: argparse.Namespace) -> int:
     p = target_path()
     if not p.exists():
@@ -222,6 +235,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.add_argument("shell", choices=SUPPORTED_SHELLS)
     sp.set_defaults(func=_cmd_init_shell)
+
+    sp = sub.add_parser(
+        "install-shell",
+        help=(
+            "install the shell wrapper for the given shell. Idempotent: "
+            "running again replaces the snippet in place. Use 'auto' to "
+            "detect from $SHELL / platform."
+        ),
+    )
+    sp.add_argument("shell", choices=INSTALL_SHELLS)
+    sp.set_defaults(func=_cmd_install_shell)
 
     sp = sub.add_parser(
         "which",

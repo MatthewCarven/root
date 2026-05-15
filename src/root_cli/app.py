@@ -6,13 +6,21 @@ UX:
 - Bottom: a footer of keybindings.
 
 Keys:
-- Enter         Commit highlighted candidate (writes to sentinel + exits).
-- Right         Descend into highlighted directory (tree-browse).
-- Left          Go up one directory in tree-browse.
+- Enter         Commit highlighted candidate (and cd there). On the
+                ".." row, ascend the browse view instead of committing.
+- Right         Descend into highlighted directory (browse w/o commit).
+- Left          Go up one directory.
 - Ctrl+B        Bookmark the highlighted directory (asks for a name).
-- Ctrl+D        Remove the highlighted bookmark (only if it IS a bookmark).
+- Ctrl+D        Remove the highlighted bookmark.
 - Ctrl+H        Forget the highlighted recent.
 - Esc           Quit without committing.
+
+Default cursor positioning, when the input is blank:
+- If you haven't navigated yet (browse_dir == start_dir), the cursor
+  skips the synthetic '.' and '..' rows and lands on the first real
+  entry -- so Enter takes you somewhere new, not back where you are.
+- Once you've navigated (via '..' or arrow-right), the cursor defaults
+  to '.', so just hitting Enter commits the folder you're viewing.
 """
 from __future__ import annotations
 
@@ -21,7 +29,6 @@ from typing import List, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
@@ -35,7 +42,6 @@ class _CandidateRow(ListItem):
 
     def __init__(self, candidate: Candidate) -> None:
         self.candidate = candidate
-        # Two-line layout: "* name   /full/path"
         label = f"[b]{candidate.source.icon}[/b]  {self._format_label(candidate)}"
         super().__init__(Label(label, markup=True))
 
@@ -43,8 +49,9 @@ class _CandidateRow(ListItem):
     def _format_label(c: Candidate) -> str:
         if c.source is Source.BOOKMARK:
             return f"[b]{c.label}[/b]  [dim]{c.path}[/dim]"
+        if c.is_self_entry:
+            return f"[b].[/b]   [dim]commit {c.path}[/dim]"
         if c.is_parent_entry:
-            # Synthetic ".." parent — show where it'll take you.
             return f"[b]..[/b]  [dim]up to {c.path}[/dim]"
         if c.source is Source.TREE:
             return f"{c.label}/  [dim]({c.path.parent})[/dim]"
@@ -60,12 +67,6 @@ class RootApp(App):
     .prompt {
         padding: 1 1 0 1;
         color: $text-muted;
-    }
-    #namebar {
-        dock: top;
-        height: 3;
-        padding: 1;
-        background: $boost;
     }
     """
 
@@ -98,13 +99,12 @@ class RootApp(App):
         self.bookmarks = bookmarks
         self.history = history
         self.browse_dir = start_dir
+        self._start_dir = start_dir  # for "have I navigated?" default-cursor logic
         self.context = CandidateContext(
             config=config, bookmarks=bookmarks, history=history, cwd=start_dir
         )
         self.committed_path: Optional[Path] = None
         self._candidates: List[Candidate] = []
-
-    # ----- layout -----
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -117,10 +117,7 @@ class RootApp(App):
         self.title = "root"
         self.sub_title = str(self.browse_dir)
         self._refresh()
-        # Focus input by default so typing starts filtering immediately.
         self.query_one(Input).focus()
-
-    # ----- refresh -----
 
     def _refresh(self) -> None:
         self.context.cwd = self.browse_dir
@@ -129,8 +126,7 @@ class RootApp(App):
         lv.clear()
         for c in self._candidates:
             lv.append(_CandidateRow(c))
-        if self._candidates:
-            lv.index = 0
+        lv.index = self._default_cursor_index()
 
         status = self.query_one("#status", Static)
         status.update(
@@ -139,11 +135,28 @@ class RootApp(App):
         )
         self.sub_title = str(self.browse_dir)
 
-    # ----- events -----
+    def _default_cursor_index(self) -> Optional[int]:
+        """Pick a sensible starting selection.
+
+        - Filtered (non-blank query): row 0, the highest-scoring match.
+        - Default view, navigated (browse_dir != start_dir): row 0,
+          which is '.', so Enter commits the current view.
+        - Default view, still in the starting dir: skip '.' and '..'
+          so Enter takes the user to a *new* destination.
+        """
+        if not self._candidates:
+            return None
+        if self.query:
+            return 0
+        if self.browse_dir != self._start_dir:
+            return 0
+        for i, cand in enumerate(self._candidates):
+            if not cand.is_special:
+                return i
+        return 0  # fallback (shouldn't happen)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if self._bookmark_mode:
-            # Different input flow while naming a bookmark — ignore here.
             return
         self.query = event.value
         self._refresh()
@@ -154,8 +167,6 @@ class RootApp(App):
         else:
             self.action_commit()
 
-    # ----- helpers -----
-
     def _current(self) -> Optional[Candidate]:
         lv = self.query_one(ListView)
         idx = lv.index
@@ -163,17 +174,22 @@ class RootApp(App):
             return None
         return self._candidates[idx]
 
-    # ----- actions -----
-
     def action_commit(self) -> None:
-        # Guard against double-fire: on some platforms pressing Enter
-        # while focused on Input triggers BOTH the priority key binding
-        # and Input.Submitted, which would run this method twice.
         if self.committed_path is not None:
             return
         cand = self._current()
         if cand is None:
             return
+
+        # Enter on '..' is a *navigation*, not a commit. Ascend the
+        # browse view; the user can then pick a child or hit '.' to
+        # commit where they've landed.
+        if cand.is_parent_entry:
+            self.action_ascend()
+            return
+
+        # Enter on '.' commits the current browse directory. For all
+        # other rows, commit the candidate's path.
         try:
             resolved = cand.path.resolve()
         except OSError:
@@ -190,10 +206,13 @@ class RootApp(App):
         cand = self._current()
         if cand is None:
             return
+        # Right-arrow on '..' ascends (its .path *is* the parent).
+        # Right-arrow on '.' is a no-op (descend into self == stay).
+        if cand.is_self_entry:
+            return
         try:
             if cand.path.is_dir():
                 self.browse_dir = cand.path.resolve()
-                # Reset the query so the new dir's children show up.
                 self.query_one(Input).value = ""
                 self.query = ""
                 self._refresh()
@@ -216,7 +235,7 @@ class RootApp(App):
 
     def action_bookmark(self) -> None:
         cand = self._current()
-        if cand is None:
+        if cand is None or cand.is_special:
             return
         self._enter_bookmark_mode(cand.path.resolve())
 
@@ -235,8 +254,6 @@ class RootApp(App):
         if self.history.forget(cand.path):
             self.history.save()
             self._refresh()
-
-    # ----- bookmark naming flow -----
 
     def _enter_bookmark_mode(self, path: Path) -> None:
         self._bookmark_mode = True

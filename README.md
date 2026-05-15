@@ -19,61 +19,98 @@ Then wire it into your shell so that `root` can actually change directories
 (a Python child process can't, on its own, `cd` its parent shell — we need a
 tiny wrapper function that does it).
 
-### bash / zsh
-Add this to your `~/.bashrc` or `~/.zshrc`:
+### One-liner install (recommended)
+
 ```sh
-eval "$(root init-shell bash)"   # or  zsh
+root install-shell auto
 ```
 
-### fish
-```fish
-root init-shell fish | source
-# or persistently:
-root init-shell fish > ~/.config/fish/functions/root.fish
+This detects your shell from `$SHELL` / your platform and does the right
+thing: creates the rc file or `$PROFILE` if missing, appends the wrapper
+inside marker comments (so re-running is idempotent), and prints whatever
+remaining step you need to take (usually one `source` command). You can
+also be explicit:
+
+```sh
+root install-shell bash         # appends to ~/.bashrc
+root install-shell zsh          # appends to ~/.zshrc
+root install-shell fish         # writes ~/.config/fish/functions/root.fish
+root install-shell powershell   # appends to $PROFILE (creates it if missing)
+root install-shell cmd          # drops root.cmd in %USERPROFILE%\.root\bin
+                                # and prepends that dir to your user PATH
 ```
 
-### PowerShell
-Append to your `$PROFILE`:
+After install, load the wrapper in your *current* session:
+
+```sh
+source ~/.bashrc          # bash
+source ~/.zshrc           # zsh
+. $PROFILE                # PowerShell
+# fish autoloads it — just open a new shell, or:
+source ~/.config/fish/functions/root.fish
+# cmd.exe: open a new cmd.exe window so the new PATH takes effect.
+```
+
+### If `install-shell` isn't an option (or you want to see what it does)
+
+Use `root init-shell <shell>` to *print* the wrapper to stdout — useful
+for inspection or piping into a custom location:
+
+```sh
+eval "$(root init-shell bash)"                        # bash/zsh, one-shot
+root init-shell fish | source                          # fish, one-shot
+root init-shell powershell | Out-String | Invoke-Expression  # PowerShell
+```
+
+### PowerShell execution policy
+
+If `. $PROFILE` errors with "running scripts is disabled on this system,"
+you need to allow signed local scripts once per user:
+
 ```powershell
-root init-shell powershell | Out-String | Invoke-Expression
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
-Or persistently:
-```powershell
-root init-shell powershell >> $PROFILE
-```
-
-### cmd.exe
-The trickiest of the bunch. The wrapper is a batch file you need to put on
-your PATH *before* the directory where pip installs `root.exe`. Run:
-```cmd
-root init-shell cmd
-```
-and save the output as `root.cmd` somewhere on your PATH ahead of your
-Python Scripts dir. Or use a `doskey` macro from cmd.exe AutoRun — see the
-comments in the printed output for the registry one-liner.
 
 ## Use
 
 Just type `root` from anywhere. A list appears:
 
 ```
-* work       /Users/me/code/big-project       (bookmarked)
-~ /Users/me/code/api-service                  (recent)
+> .          commit /Users/me/code/big-project   (commit current view)
+> ..         up to /Users/me/code                (go up one level)
+* work       /Users/me/code/big-project          (bookmarked)
+~ /Users/me/code/api-service                     (recent)
 ~ /Users/me/Documents/notes
-> ..         up to /Users/me                  (jump to parent)
-> tests/                                      (child of cwd)
+> tests/                                         (child of cwd)
 > src/
 ? alpha-service  (matched from ~/code/*)
 ```
 
-The `..` row is only shown when you're not at the filesystem root of a
-drive (so on `/` or `C:\`, it disappears).
+Two synthetic rows are special:
+
+- **`.`** commits the directory you're currently *viewing*. Useful
+  after navigating up via `..` — once you've landed on the folder you
+  want, hit Enter on `.` to cd there.
+- **`..`** ascends the view to the parent. Enter on `..` does *not*
+  exit — it just changes the visible folder. (Use it like a "go up"
+  button. To actually land at a parent, navigate up then Enter on `.`,
+  or arrow-down to a sibling and Enter on that.) Hidden at filesystem
+  roots, where there is no parent.
+
+The default cursor position is smart:
+
+- In your starting directory, the cursor skips `.` and `..` and lands
+  on the first real entry (first bookmark / recent / child), so hitting
+  Enter takes you somewhere new — not a no-op cd to where you already
+  are.
+- Once you've navigated away (via `..` or →), the cursor defaults to
+  `.`, so just pressing Enter commits the folder you're now viewing.
 
 - Type to fuzzy-filter. All four sources merge into one ranked list.
-- ↑/↓ to move. **Enter** to commit and `cd` (works on `..` too —
-  cds into the parent).
-- **→** to descend into the highlighted directory without committing
-  (tree-browse mode); **←** goes up one level.
+  (The synthetic `.` and `..` rows disappear while you're filtering.)
+- ↑/↓ to move. **Enter** commits the highlighted entry and `cd`s there.
+- **→** descends into the highlighted directory (browse without
+  committing); **←** goes up one level (same as Enter on `..`).
 - **Ctrl+B** bookmarks the highlighted dir (asks for a name).
 - **Ctrl+D** removes the highlighted bookmark.
 - **Ctrl+H** forgets the highlighted recent.
