@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "root-cli"
+version = "0.1.0"
+description = "Terminal UI for jumping to the folder you want — fast, cross-platform, with bookmarks, frecency, and fuzzy search."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Matthew" }]
+keywords = ["cd", "navigation", "tui", "textual", "shell", "directory"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console :: Curses",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Shells",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "textual>=0.50",
+    "platformdirs>=3.0",
+    "tomli>=2.0; python_version<'3.11'",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov"]
+
+[project.scripts]
+root = "root_cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/matthewcarven/root"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/root_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
