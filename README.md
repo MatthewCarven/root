@@ -116,8 +116,9 @@ The default cursor position is smart:
 - Type to fuzzy-filter. All four sources merge into one ranked list.
   (The synthetic `.` and `..` rows disappear while you're filtering.)
 - ↑/↓ to move. **Enter** commits the highlighted entry and `cd`s there.
-- **→** descends into the highlighted directory (browse without
-  committing); **←** goes up one level (same as Enter on `..`).
+- **→** (or **Shift+Enter**) descends into the highlighted directory
+  (browse without committing); **←** goes up one level (same as Enter
+  on `..`).
 - **Ctrl+B** bookmarks the highlighted dir (asks for a name).
 - **Ctrl+D** removes the highlighted bookmark.
 - **Ctrl+H** forgets the highlighted recent.

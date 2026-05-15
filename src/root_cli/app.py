@@ -9,6 +9,7 @@ Keys:
 - Enter         Commit highlighted candidate (and cd there). On the
                 ".." row, ascend the browse view instead of committing.
 - Right         Descend into highlighted directory (browse w/o commit).
+- Shift+Enter   Same as Right -- descend without committing/exiting.
 - Left          Go up one directory.
 - Ctrl+B        Bookmark the highlighted directory (asks for a name).
 - Ctrl+D        Remove the highlighted bookmark.
@@ -72,6 +73,7 @@ class RootApp(App):
 
     BINDINGS = [
         Binding("right", "descend", "into"),
+        Binding("shift+enter", "descend", "into", show=False, priority=True),
         Binding("left", "ascend", "up"),
         Binding("ctrl+b", "bookmark", "+bm"),
         Binding("ctrl+d", "remove_bookmark", "-bm"),
@@ -130,7 +132,11 @@ class RootApp(App):
         status = self.query_one("#status", Static)
         status.update(
             f"[dim]browsing[/dim] [b]{self.browse_dir}[/b]   "
-            f"[dim]{len(self._candidates)} result(s)[/dim]"
+            f"[dim]{len(self._candidates)} result(s)[/dim]\n"
+            f"[dim]Enter[/dim] go    "
+            f"[dim]→ or Shift+Enter[/dim] descend (no exit)    "
+            f"[dim]←[/dim] up    "
+            f"[dim]Esc[/dim] quit"
         )
         self.sub_title = str(self.browse_dir)
 

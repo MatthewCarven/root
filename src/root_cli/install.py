@@ -191,6 +191,14 @@ def _merge_autorun(existing: Optional[str], our_command: str) -> str:
         # append to keep things from getting weirder.
     return f"{existing.rstrip().rstrip('&').rstrip()} & {block}"
 
+
+def install_cmd() -> InstallResult:
+    home = Path.home()
+    bin_dir = home / ".root" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    target = bin_dir / "root.cmd"
+    target.write_text(_wrapper_text("root.cmd"), encoding="utf-8")
+
     doskey_cmd = f'doskey root="{target}" $*'
     try:
         existing = _read_autorun()
