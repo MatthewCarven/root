@@ -9,6 +9,9 @@ configured project roots. Hit Enter, and your shell `cd`s into the choice.
 
 Works on Linux, macOS, and Windows. Bash, Zsh, Fish, PowerShell, and cmd.exe.
 
+<img width="919" height="532" alt="image" src="https://github.com/user-attachments/assets/e024f561-f1fe-40b4-8ca4-a592d0b4e839" />
+
+
 ## Install
 
 ```sh
