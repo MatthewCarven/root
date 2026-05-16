@@ -120,8 +120,9 @@ The default cursor position is smart:
   (browse without committing); **←** goes up one level (same as Enter
   on `..`).
 - **Ctrl+B** bookmarks the highlighted dir (asks for a name).
-- **Ctrl+D** removes the highlighted bookmark.
-- **Ctrl+H** forgets the highlighted recent.
+- **Ctrl+D** deletes the highlighted entry — removes a bookmark (`*` row)
+  or forgets a recent (`~` row), depending on what's highlighted.
+- **Ctrl+H** is an alias for **Ctrl+D** (kept for muscle-memory).
 - **Esc** quits without changing dir.
 
 ### Subcommands (no TUI)

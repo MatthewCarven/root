@@ -12,8 +12,9 @@ Keys:
 - Shift+Enter   Same as Right -- descend without committing/exiting.
 - Left          Go up one directory.
 - Ctrl+B        Bookmark the highlighted directory (asks for a name).
-- Ctrl+D        Remove the highlighted bookmark.
-- Ctrl+H        Forget the highlighted recent.
+- Ctrl+D        Delete the highlighted entry: removes a bookmark (*) or
+                forgets a recent (~), depending on the row.
+- Ctrl+H        Alias for Ctrl+D (legacy / muscle-memory).
 - Esc           Quit without committing.
 
 Default cursor positioning, when the input is blank:
@@ -75,9 +76,9 @@ class RootApp(App):
         Binding("right", "descend", "into"),
         Binding("shift+enter", "descend", "into", show=False, priority=True),
         Binding("left", "ascend", "up"),
-        Binding("ctrl+b", "bookmark", "+bm"),
-        Binding("ctrl+d", "remove_bookmark", "-bm"),
-        Binding("ctrl+h", "forget_recent", "-recent"),
+        Binding("ctrl+b", "bookmark", "+bm", priority=True),
+        Binding("ctrl+d", "remove_bookmark", "del", priority=True),
+        Binding("ctrl+h", "forget_recent", "del", show=False, priority=True),
         Binding("escape", "cancel", "quit"),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
@@ -249,31 +250,66 @@ class RootApp(App):
 
     def action_bookmark(self) -> None:
         cand = self._current()
-        if cand is None or cand.is_special:
+        if cand is None:
             return
+        # If the highlighted row is already a bookmark, don't open
+        # the "name this" prompt -- that just creates a duplicate
+        # under a new alias. Point the user at Ctrl+D instead.
+        if cand.source is Source.BOOKMARK:
+            self.query_one("#status", Static).update(
+                f"[yellow]'{cand.label}' is already bookmarked.[/yellow]  "
+                f"[dim]Ctrl+D to remove it.[/dim]"
+            )
+            return
+        # '.' and '..' are bookmarkable -- their .path is concrete (the
+        # browse dir or its parent), and _enter_bookmark_mode prefills
+        # path.name as the suggested alias, which is exactly what the
+        # user wants ("bookmark this folder I'm looking at by its name").
         self._enter_bookmark_mode(cand.path.resolve())
 
     def action_remove_bookmark(self) -> None:
+        """Ctrl+D: delete the highlighted entry.
+
+        Polymorphic by row type:
+        - bookmark (*) row -> remove from bookmarks.toml
+        - recent   (~) row -> forget from history.json
+        - anything else    -> status hint (so the keypress isn't silent)
+        """
         cand = self._current()
-        if cand is None or cand.source is not Source.BOOKMARK:
+        if cand is None:
             return
-        if self.bookmarks.remove(cand.label):
-            self.bookmarks.save()
-            self._refresh()
+        if cand.source is Source.BOOKMARK:
+            if self.bookmarks.remove(cand.label):
+                self.bookmarks.save()
+                self._refresh()
+            return
+        if cand.source is Source.RECENT:
+            if self.history.forget(cand.path):
+                self.history.save()
+                self._refresh()
+            return
+        self.query_one("#status", Static).update(
+            "[dim]Ctrl+D removes bookmarks ([b]*[/b]) and recents "
+            "([b]~[/b]) -- nothing to remove on this row.[/dim]"
+        )
 
     def action_forget_recent(self) -> None:
-        cand = self._current()
-        if cand is None or cand.source is not Source.RECENT:
-            return
-        if self.history.forget(cand.path):
-            self.history.save()
-            self._refresh()
+        """Ctrl+H: alias for Ctrl+D on a recent row.
+
+        Kept for muscle-memory / discoverability. Same dispatcher as
+        action_remove_bookmark, so it Just Works on bookmark rows too.
+        """
+        self.action_remove_bookmark()
 
     def _enter_bookmark_mode(self, path: Path) -> None:
         self._bookmark_mode = True
         self._pending_bookmark_path = path
         inp = self.query_one(Input)
-        inp.value = path.name
+        # path.name is empty at filesystem roots (e.g. Path("C:\\").name
+        # == ""). Fall back to a sanitised drive/path stub so the field
+        # isn't blank -- the user can still overwrite it.
+        default = path.name or path.anchor.rstrip("\\/:") or str(path)
+        inp.value = default
         inp.placeholder = f"name this bookmark for {path}  (Enter to save, Esc to cancel)"
         self.query_one("#status", Static).update(
             f"[yellow]bookmarking[/yellow] {path} — enter a name"
