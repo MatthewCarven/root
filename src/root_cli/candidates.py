@@ -82,6 +82,39 @@ def _tree_children(directory, show_hidden):
         return
 
 
+def preview_entries(directory: Path, show_hidden: bool, limit: int = 40) -> List[str]:
+    """First-level contents of *directory*, for the TUI preview pane.
+
+    Directories first (with a trailing '/'), then files, each group
+    sorted case-insensitively. Honors show_hidden the same way the
+    tree browser does. Truncated to *limit* entries with a trailing
+    "+N more" marker. Never raises: unreadable dirs come back as a
+    single explanatory line.
+    """
+    try:
+        entries = list(directory.iterdir())
+    except PermissionError:
+        return ["<permission denied>"]
+    except OSError as exc:
+        return [f"<unreadable: {exc.__class__.__name__}>"]
+    if not show_hidden:
+        entries = [e for e in entries if not e.name.startswith(".")]
+    dirs: List[Path] = []
+    files: List[Path] = []
+    for e in entries:
+        try:
+            (dirs if e.is_dir() else files).append(e)
+        except OSError:
+            files.append(e)
+    names = [d.name + "/" for d in sorted(dirs, key=lambda p: p.name.lower())]
+    names += [f.name for f in sorted(files, key=lambda p: p.name.lower())]
+    if not names:
+        return ["<empty>"]
+    if len(names) > limit:
+        names = names[:limit] + [f"… +{len(names) - limit} more"]
+    return names
+
+
 def _glob_search_roots(roots):
     """One level deep: each configured pattern is expanded with Path.glob."""
     seen = set()

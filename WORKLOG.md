@@ -91,3 +91,34 @@ message so the next user isn't confused.
   in-place replace / preserve-prologue).
 
 Both Matthew's PowerShell AND cmd setups confirmed working end-to-end.
+
+## 2026-06-11 — Preview pane
+
+**Preview pane shipped** (first item on the nice-to-have list). The TUI
+now has a right-side panel showing the first-level contents of whatever
+row is highlighted: directories first with trailing `/`, then files,
+both case-insensitively sorted, capped at 40 entries with a `+N more`
+marker. Synthetic rows preview their concrete path ('.' = browse dir,
+'..' = parent). Empty dirs show `<empty>`; permission/OS errors come
+back as one explanatory line instead of raising.
+
+Implementation: pure `preview_entries()` helper in candidates.py (fully
+unit-testable, no Textual import), wired into app.py via a Horizontal
+container (ListView 2fr / preview 1fr) and `on_list_view_highlighted`.
+Honors `show_hidden` the same way the tree browser does. Rich markup in
+filenames is escaped.
+
+**Sandbox footgun discovered:** editing candidates.py via the host-side
+file tools produced a truncated view on the Linux mount (stale size,
+mixed content) that wouldn't refresh — stale `__pycache__` first masked
+it, then a SyntaxError exposed it. Rewriting the file from the sandbox
+shell side resynced both views. If pytest ever reports a SyntaxError on
+a file that looks fine, suspect the mount, not the code.
+
+Tests 53 → 58 (5 new for preview_entries: ordering, hidden-file
+handling, empty dir, truncation marker, unreadable dir). Verified the
+pane live with Textual's pilot harness: highlight changes update the
+panel correctly.
+
+Not yet visually checked on Matthew's Windows terminal — worth one
+quick look at proportions/border before calling it polished.

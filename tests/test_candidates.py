@@ -197,3 +197,50 @@ def test_self_entry_path_is_browse_dir(tmp_path, isolated_config):
     selves = [c for c in out if c.is_self_entry]
     assert len(selves) == 1
     assert selves[0].path.resolve() == deep.resolve()
+
+
+# ---------------------------------------------------------------------------
+# preview_entries (the TUI preview pane's data source)
+# ---------------------------------------------------------------------------
+
+from root_cli.candidates import preview_entries  # noqa: E402
+
+
+def test_preview_dirs_first_then_files_sorted(tmp_path):
+    (tmp_path / "zeta").mkdir()
+    (tmp_path / "Alpha").mkdir()
+    (tmp_path / "notes.txt").write_text("x")
+    (tmp_path / "BUILD").write_text("x")
+    assert preview_entries(tmp_path, show_hidden=False) == [
+        "Alpha/",
+        "zeta/",
+        "BUILD",
+        "notes.txt",
+    ]
+
+
+def test_preview_hides_dotfiles_unless_show_hidden(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".env").write_text("x")
+    (tmp_path / "src").mkdir()
+    assert preview_entries(tmp_path, show_hidden=False) == ["src/"]
+    assert preview_entries(tmp_path, show_hidden=True) == [".git/", "src/", ".env"]
+
+
+def test_preview_empty_dir(tmp_path):
+    assert preview_entries(tmp_path, show_hidden=False) == ["<empty>"]
+
+
+def test_preview_truncates_with_more_marker(tmp_path):
+    for i in range(45):
+        (tmp_path / f"f{i:02d}").write_text("x")
+    out = preview_entries(tmp_path, show_hidden=False, limit=40)
+    assert len(out) == 41
+    assert out[-1] == "… +5 more"
+    assert out[0] == "f00"
+
+
+def test_preview_missing_dir_does_not_raise(tmp_path):
+    out = preview_entries(tmp_path / "nope", show_hidden=False)
+    assert len(out) == 1
+    assert out[0].startswith("<unreadable:")

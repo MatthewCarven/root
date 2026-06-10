@@ -2,7 +2,7 @@
 
 ## Nice-to-haves
 
-- [ ] Preview pane: show first-level contents of the highlighted dir on
+- [x] Preview pane: show first-level contents of the highlighted dir on
       the right side of the UI (Textual makes this easy).
 - [ ] `.gitignore`-aware tree browsing (skip vendored dirs).
 - [ ] Multi-level glob: today search roots are one level deep

@@ -29,12 +29,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
-from root_cli.candidates import Candidate, CandidateContext, Source, commit_path
+from root_cli.candidates import (
+    Candidate,
+    CandidateContext,
+    Source,
+    commit_path,
+    preview_entries,
+)
 from root_cli.config import Bookmarks, Config
 from root_cli.history import History
 
@@ -65,7 +73,16 @@ class RootApp(App):
     Screen { layout: vertical; }
     #status { padding: 0 1; color: $text-muted; }
     Input { dock: top; }
-    ListView { height: 1fr; }
+    #main { height: 1fr; }
+    #main ListView { width: 2fr; height: 100%; }
+    #preview {
+        width: 1fr;
+        height: 100%;
+        padding: 0 1;
+        border-left: solid $panel;
+        color: $text-muted;
+        overflow: hidden;
+    }
     .prompt {
         padding: 1 1 0 1;
         color: $text-muted;
@@ -112,7 +129,9 @@ class RootApp(App):
         yield Header(show_clock=False)
         yield Input(placeholder="type to fuzzy-search — or arrow keys to browse")
         yield Static("", id="status", classes="prompt")
-        yield ListView()
+        with Horizontal(id="main"):
+            yield ListView()
+            yield Static("", id="preview")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -140,6 +159,36 @@ class RootApp(App):
             f"[dim]Esc[/dim] quit"
         )
         self.sub_title = str(self.browse_dir)
+        self._update_preview()
+
+    def _update_preview(self) -> None:
+        """Refresh the right-side pane with the highlighted dir's contents.
+
+        Synthetic rows preview their concrete .path (the browse dir for
+        '.', its parent for '..'), which is what the user expects: "what
+        will I find if I go here?"
+        """
+        pane = self.query_one("#preview", Static)
+        cand = self._current()
+        if cand is None:
+            pane.update("")
+            return
+        path = cand.path
+        try:
+            if not path.is_dir():
+                pane.update("")
+                return
+        except OSError:
+            pane.update("")
+            return
+        names = preview_entries(path, self.config.show_hidden)
+        title = escape(path.name or str(path))
+        body = "\n".join(escape(n) for n in names)
+        pane.update(f"[b]{title}[/b]\n{body}")
+
+    def on_list_view_highlighted(self, _event: ListView.Highlighted) -> None:
+        if not self._bookmark_mode:
+            self._update_preview()
 
     def _default_cursor_index(self) -> Optional[int]:
         """Pick a sensible starting selection.
@@ -304,41 +353,4 @@ class RootApp(App):
     def _enter_bookmark_mode(self, path: Path) -> None:
         self._bookmark_mode = True
         self._pending_bookmark_path = path
-        inp = self.query_one(Input)
-        # path.name is empty at filesystem roots (e.g. Path("C:\\").name
-        # == ""). Fall back to a sanitised drive/path stub so the field
-        # isn't blank -- the user can still overwrite it.
-        default = path.name or path.anchor.rstrip("\\/:") or str(path)
-        inp.value = default
-        inp.placeholder = f"name this bookmark for {path}  (Enter to save, Esc to cancel)"
-        self.query_one("#status", Static).update(
-            f"[yellow]bookmarking[/yellow] {path} — enter a name"
-        )
-
-    def _finalize_bookmark(self) -> None:
-        inp = self.query_one(Input)
-        name = inp.value.strip()
-        if name and self._pending_bookmark_path is not None:
-            self.bookmarks.add(name, self._pending_bookmark_path)
-            self.bookmarks.save()
-        self._bookmark_mode = False
-        self._pending_bookmark_path = None
-        inp.value = ""
-        inp.placeholder = "type to fuzzy-search — or arrow keys to browse"
-        self.query = ""
-        self._refresh()
-
-
-def run_app(start_dir: Optional[Path] = None) -> Optional[Path]:
-    """Launch the TUI. Returns the chosen path, or None if cancelled."""
-    config = Config.load()
-    bookmarks = Bookmarks.load()
-    history = History.load()
-    app = RootApp(
-        config=config,
-        bookmarks=bookmarks,
-        history=history,
-        start_dir=(start_dir or Path.cwd()).resolve(),
-    )
-    app.run()
-    return app.committed_path
+        inp = self.q
