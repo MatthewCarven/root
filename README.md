@@ -11,7 +11,6 @@ Works on Linux, macOS, and Windows. Bash, Zsh, Fish, PowerShell, and cmd.exe.
 
 <img width="1115" height="628" alt="image" src="https://github.com/user-attachments/assets/c16ccf1d-23fb-4324-a579-ce794e276c9b" />
 
-
 ## How you will look to people not using root
 
 <img width="543" height="369" alt="image" src="https://github.com/user-attachments/assets/61d12620-63b5-4da6-97d4-7634e23d9ef1" />
