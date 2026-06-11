@@ -122,3 +122,6 @@ panel correctly.
 
 Not yet visually checked on Matthew's Windows terminal — worth one
 quick look at proportions/border before calling it polished.
+
+Session ended pending Matthew's field run of the preview pane. State
+snapshot written to TODO.md ("State at 2026-06-11 session end").

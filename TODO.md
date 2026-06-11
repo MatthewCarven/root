@@ -40,3 +40,16 @@
   a config flag to disable resolve().
 - No tests yet for the Textual UI itself (Textual's pilot harness
   would let us add some).
+
+## State at 2026-06-11 session end
+
+- Preview pane is implemented and committed (`3b4b224`), 58/58 tests
+  green, verified headless via Textual pilot.
+- **Matthew: field-test the preview pane** — run `root`, check
+  proportions (list 2fr / pane 1fr), border, and feel at your usual
+  window size. Report anything off and we'll polish.
+- **Matthew: push** — two unpushed commits on main (`be69b39`
+  housekeeping, `3b4b224` preview pane).
+- Likely next item after field test: `root uninstall-shell` (well
+  scoped, mirrors install-shell), or the pip post-install hint
+  (needs investigation — wheels lack post-install hooks).
