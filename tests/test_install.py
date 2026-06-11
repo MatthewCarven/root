@@ -158,3 +158,155 @@ class TestAutoRunMerge:
         assert "echo BYE" in out
         assert "C:\\new" in out
         assert "C:\\old" not in out
+
+
+# ----- uninstall -----
+
+from root_cli.install import (
+    _remove_marker_block,
+    _unmerge_autorun,
+    install_bash_zsh,
+    uninstall,
+    uninstall_bash_zsh,
+    uninstall_fish,
+)
+
+
+class TestRemoveMarkerBlock:
+    def test_not_found_returns_unchanged(self):
+        out, found = _remove_marker_block("some content\n")
+        assert not found
+        assert out == "some content\n"
+
+    def test_roundtrip_restores_original(self):
+        original = "# my rc\nalias ll='ls -l'\n"
+        installed = _idempotent_replace(original, "function root() { :; }")
+        out, found = _remove_marker_block(installed)
+        assert found
+        assert "root shell wrapper" not in out
+        assert "alias ll" in out
+        assert "\n\n\n" not in out
+
+    def test_block_only_file_becomes_empty(self):
+        installed = _idempotent_replace("", "function root() { :; }")
+        out, found = _remove_marker_block(installed)
+        assert found
+        assert out == ""
+
+
+class TestUninstallBashZsh:
+    def test_removes_block_preserving_content(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        rc = tmp_path / ".bashrc"
+        rc.write_text("export FOO=bar\n", encoding="utf-8")
+        install_bash_zsh("bash")
+        assert MARKER_BEGIN in rc.read_text(encoding="utf-8")
+        res = uninstall_bash_zsh("bash")
+        assert res.success
+        text = rc.read_text(encoding="utf-8")
+        assert MARKER_BEGIN not in text
+        assert "export FOO=bar" in text
+
+    def test_nothing_installed_is_a_safe_noop(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        rc = tmp_path / ".bashrc"
+        rc.write_text("export FOO=bar\n", encoding="utf-8")
+        res = uninstall_bash_zsh("bash")
+        assert res.success
+        assert "nothing to do" in res.message
+        assert rc.read_text(encoding="utf-8") == "export FOO=bar\n"
+
+    def test_missing_rc_files_is_a_safe_noop(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        res = uninstall_bash_zsh("zsh")
+        assert res.success
+        assert "nothing to do" in res.message
+
+    def test_removes_from_all_rc_files_that_have_it(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        for name in (".bashrc", ".profile"):
+            f = tmp_path / name
+            f.write_text(
+                _idempotent_replace("# rc\n", "function root() { :; }"),
+                encoding="utf-8",
+            )
+        res = uninstall_bash_zsh("bash")
+        assert res.success
+        for name in (".bashrc", ".profile"):
+            assert MARKER_BEGIN not in (tmp_path / name).read_text(encoding="utf-8")
+
+
+class TestUninstallFish:
+    def test_removes_function_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        target = tmp_path / ".config" / "fish" / "functions" / "root.fish"
+        target.parent.mkdir(parents=True)
+        target.write_text("function root; end\n", encoding="utf-8")
+        res = uninstall_fish()
+        assert res.success
+        assert not target.exists()
+
+    def test_honors_xdg_config_home(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        xdg = tmp_path / "xdg"
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+        target = xdg / "fish" / "functions" / "root.fish"
+        target.parent.mkdir(parents=True)
+        target.write_text("function root; end\n", encoding="utf-8")
+        res = uninstall_fish()
+        assert res.success
+        assert not target.exists()
+
+    def test_missing_file_is_a_safe_noop(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        res = uninstall_fish()
+        assert res.success
+        assert "nothing to do" in res.message
+
+
+class TestUnmergeAutorun:
+    def test_no_marker_reports_not_found(self):
+        out, found = _unmerge_autorun("echo HELLO")
+        assert not found
+        assert out == "echo HELLO"
+
+    def test_none_reports_not_found(self):
+        out, found = _unmerge_autorun(None)
+        assert not found
+        assert out == ""
+
+    def test_ours_only_becomes_empty(self):
+        existing = _merge_autorun(None, 'doskey root="C:\\x" $*')
+        out, found = _unmerge_autorun(existing)
+        assert found
+        assert out == ""
+
+    def test_preserves_user_prologue_and_epilogue(self):
+        existing = (
+            "echo HELLO & "
+            '(doskey root="C:\\x" $*) ' + DOSKEY_AUTORUN_MARKER
+            + " & echo BYE"
+        )
+        out, found = _unmerge_autorun(existing)
+        assert found
+        assert "echo HELLO" in out
+        assert "echo BYE" in out
+        assert DOSKEY_AUTORUN_MARKER not in out
+        assert not out.startswith("&")
+        assert not out.endswith("&")
+        assert "& &" not in out
+
+    def test_removes_dangling_trailing_ampersand(self):
+        existing = _merge_autorun("echo HELLO", 'doskey root="C:\\x" $*')
+        out, found = _unmerge_autorun(existing)
+        assert found
+        assert out == "echo HELLO"
+
+
+class TestUninstallDispatch:
+    def test_unknown_shell_returns_failure(self):
+        res = uninstall("tcsh")
+        assert not res.success
+        assert "Unknown shell" in res.message

@@ -125,3 +125,37 @@ quick look at proportions/border before calling it polished.
 
 Session ended pending Matthew's field run of the preview pane. State
 snapshot written to TODO.md ("State at 2026-06-11 session end").
+
+## 2026-06-11 — Field test passed; uninstall-shell
+
+**Preview pane field test: passed.** Matthew ran it on Windows
+Terminal (PowerShell 7.6.2), proportions and feel approved with no
+changes requested. Bonus: the pane immediately surfaced a mis-set
+bookmark (`-=Ouroboros=-` pointing one level off) — exactly the kind
+of thing it exists for. Fix is user-side: `root rm` + `root add`.
+
+**`root uninstall-shell <shell|auto>` shipped** (Matthew reached for
+it during the field test and it didn't exist — strongest possible
+prioritization signal). Mirrors install-shell:
+
+- bash/zsh: removes the BEGIN/END marker block from *all* rc
+  candidates that contain it, preserving surrounding content and
+  collapsing the blank line install adds (clean roundtrip).
+- fish: deletes the autoloaded function file (XDG-aware).
+- powershell: locates $PROFILE the same way install does, removes the
+  block; missing profile or absent block are safe no-ops.
+- cmd: `_unmerge_autorun()` strips the `(...) ::root-doskey::` block
+  from the AutoRun registry value, tidies dangling ampersands,
+  deletes the value outright if nothing else remains; removes
+  root.cmd and the bin dir if empty; broadcasts WM_SETTINGCHANGE.
+- Every path is idempotent and reports what it found/skipped.
+
+Edits made from the sandbox shell side throughout (per the mount
+footgun from earlier today) — no stale-view issues this time.
+
+Tests 58 → 74 (16 new: marker-block roundtrip, bash/zsh removal and
+no-ops, fish XDG handling, autorun unmerge prologue/epilogue/dangling-
+ampersand cases, unknown-shell dispatch).
+
+Not runnable end-to-end here (winreg is Windows-only); flagged a
+one-minute AutoRun roundtrip check for Matthew in TODO.

@@ -10,6 +10,8 @@ Subcommands:
 - ``root recent``              List frecent dirs.
 - ``root forget [PATH]``       Forget a recent (default: cwd).
 - ``root init-shell SHELL``    Print the shell wrapper for SHELL.
+- ``root install-shell SHELL``   Install the wrapper into the rc/profile.
+- ``root uninstall-shell SHELL`` Remove the installed wrapper.
 - ``root which``               Print the last chosen path (for wrappers).
 - ``root config``              Show the config file path.
 
@@ -182,6 +184,18 @@ def _cmd_install_shell(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_uninstall_shell(args: argparse.Namespace) -> int:
+    from root_cli.install import uninstall  # deferred for fast --help
+
+    result = uninstall(args.shell)
+    if result.success:
+        print("[root] uninstall finished.")
+        print(result.message)
+        return 0
+    print(f"[root] uninstall failed: {result.message}", file=sys.stderr)
+    return 1
+
+
 def _cmd_which(_args: argparse.Namespace) -> int:
     p = target_path()
     if not p.exists():
@@ -246,6 +260,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.add_argument("shell", choices=INSTALL_SHELLS)
     sp.set_defaults(func=_cmd_install_shell)
+
+    sp = sub.add_parser(
+        "uninstall-shell",
+        help=(
+            "remove the shell wrapper installed by install-shell. "
+            "Safe to re-run; reports what it found. Use 'auto' to "
+            "detect from $SHELL / platform."
+        ),
+    )
+    sp.add_argument("shell", choices=INSTALL_SHELLS)
+    sp.set_defaults(func=_cmd_uninstall_shell)
 
     sp = sub.add_parser(
         "which",

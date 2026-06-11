@@ -297,3 +297,203 @@ def install(shell: str) -> InstallResult:
         False, None,
         f"Unknown shell: {shell!r}. Try one of: bash, zsh, fish, powershell, cmd, auto.",
     )
+
+
+# ----- uninstall -----
+
+def _remove_marker_block(
+    content: str,
+    begin: str = MARKER_BEGIN,
+    end: str = MARKER_END,
+) -> "tuple[str, bool]":
+    """Remove the BEGIN/END block from ``content``.
+
+    Returns ``(new_content, found)``. Collapses the extra blank line
+    that install adds before the block so a roundtrip is clean.
+    """
+    pattern = re.compile(
+        re.escape(begin) + r".*?" + re.escape(end) + r"\n?",
+        re.DOTALL,
+    )
+    if not pattern.search(content):
+        return content, False
+    new = pattern.sub("", content)
+    new = re.sub(r"\n{3,}", "\n\n", new)
+    if new.strip() == "":
+        new = ""
+    return new, True
+
+
+def uninstall_bash_zsh(shell: str) -> InstallResult:
+    home = Path.home()
+    candidates: List[Path] = {
+        "bash": [home / ".bashrc", home / ".bash_profile", home / ".profile"],
+        "zsh":  [home / ".zshrc", home / ".zprofile"],
+    }[shell]
+    removed: List[Path] = []
+    for target in candidates:
+        if not target.exists():
+            continue
+        content = target.read_text(encoding="utf-8")
+        new, found = _remove_marker_block(content)
+        if found:
+            target.write_text(new, encoding="utf-8")
+            removed.append(target)
+    if removed:
+        names = ", ".join(str(p) for p in removed)
+        return InstallResult(
+            True, removed[0],
+            f"Removed wrapper from {names}.\n"
+            f"Open a new {shell} shell (or run `unset -f root`) to finish.",
+        )
+    return InstallResult(
+        True, None,
+        f"No root wrapper found in {shell} rc files -- nothing to do.",
+    )
+
+
+def uninstall_fish() -> InstallResult:
+    home = Path.home()
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or (home / ".config"))
+    target = base / "fish" / "functions" / "root.fish"
+    if target.exists():
+        target.unlink()
+        return InstallResult(
+            True, target,
+            f"Removed {target}.\n"
+            "Open a new fish shell (or run `functions -e root`) to finish.",
+        )
+    return InstallResult(
+        True, None,
+        f"{target} not present -- nothing to do.",
+    )
+
+
+def uninstall_powershell() -> InstallResult:
+    ps_cmd = shutil.which("pwsh") or shutil.which("powershell")
+    if ps_cmd is None:
+        return InstallResult(
+            False, None,
+            "PowerShell isn't on PATH. Cannot locate $PROFILE.",
+        )
+    res = subprocess.run(
+        [ps_cmd, "-NoProfile", "-Command", "Write-Output $PROFILE"],
+        capture_output=True, text=True, check=False,
+    )
+    if res.returncode != 0 or not res.stdout.strip():
+        return InstallResult(
+            False, None,
+            f"Could not determine $PROFILE: {res.stderr.strip() or 'no output'}",
+        )
+    profile = Path(res.stdout.strip())
+    if not profile.exists():
+        return InstallResult(
+            True, None,
+            f"{profile} not present -- nothing to do.",
+        )
+    content = profile.read_text(encoding="utf-8")
+    new, found = _remove_marker_block(content)
+    if not found:
+        return InstallResult(
+            True, None,
+            f"No root wrapper found in {profile} -- nothing to do.",
+        )
+    profile.write_text(new, encoding="utf-8")
+    return InstallResult(
+        True, profile,
+        f"Removed wrapper from {profile}.\n"
+        "Open a new PowerShell window (or run `Remove-Item Function:root`) "
+        "to finish.",
+    )
+
+
+def _unmerge_autorun(existing: Optional[str]) -> "tuple[str, bool]":
+    """Remove our sentinel block from an AutoRun value.
+
+    Returns ``(new_value, found)``. ``new_value`` may be the empty
+    string, meaning the AutoRun value should be deleted entirely.
+    Dangling ampersands left by the removal are tidied up.
+    """
+    if not existing or DOSKEY_AUTORUN_MARKER not in existing:
+        return existing or "", False
+    pattern = re.compile(r"\([^)]*\)\s*" + re.escape(DOSKEY_AUTORUN_MARKER))
+    new = pattern.sub("", existing).strip()
+    new = re.sub(r"^&\s*", "", new)
+    new = re.sub(r"\s*&$", "", new)
+    new = re.sub(r"\s*&\s*&\s*", " & ", new)
+    return new.strip(), True
+
+
+def _delete_autorun() -> None:
+    import winreg  # type: ignore[import-not-found]
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        r"Software\Microsoft\Command Processor",
+        0, winreg.KEY_SET_VALUE,
+    ) as k:
+        winreg.DeleteValue(k, "AutoRun")
+
+
+def uninstall_cmd() -> InstallResult:
+    home = Path.home()
+    bin_dir = home / ".root" / "bin"
+    target = bin_dir / "root.cmd"
+    notes: List[str] = []
+
+    # 1. Drop our doskey block from AutoRun.
+    try:
+        existing = _read_autorun()
+        new, found = _unmerge_autorun(existing)
+        if found:
+            if new:
+                _write_autorun(new)
+            else:
+                _delete_autorun()
+            notes.append("Removed the root doskey entry from cmd.exe AutoRun.")
+        else:
+            notes.append("No root doskey entry in AutoRun -- skipped.")
+    except (ImportError, OSError) as e:
+        notes.append(
+            f"Could not update AutoRun automatically ({e}).\n"
+            "Manual cleanup -- inspect the value with:\n"
+            '  reg query "HKCU\\Software\\Microsoft\\Command Processor" /v AutoRun\n'
+            "then remove the `(doskey root=...) ::root-doskey::` part "
+            "(delete the value if nothing else remains)."
+        )
+
+    # 2. Remove the wrapper script (and its dir, if now empty).
+    if target.exists():
+        try:
+            target.unlink()
+            notes.append(f"Deleted {target}.")
+        except OSError as e:
+            notes.append(f"Could not delete {target} ({e}) -- remove it manually.")
+        try:
+            bin_dir.rmdir()  # only succeeds when empty; that's intended
+        except OSError:
+            pass
+    else:
+        notes.append(f"{target} not present -- skipped.")
+
+    _broadcast_settings_change()
+    notes.append("Open a NEW cmd.exe window for the change to take effect.")
+    return InstallResult(True, target, "\n".join(notes))
+
+
+def uninstall(shell: str) -> InstallResult:
+    """Dispatch by shell name (mirror of :func:`install`)."""
+    s = shell.lower()
+    if s == "auto":
+        s = detect_shell()
+    if s in ("bash", "zsh"):
+        return uninstall_bash_zsh(s)
+    if s == "fish":
+        return uninstall_fish()
+    if s in ("powershell", "pwsh"):
+        return uninstall_powershell()
+    if s == "cmd":
+        return uninstall_cmd()
+    return InstallResult(
+        False, None,
+        f"Unknown shell: {shell!r}. Try one of: bash, zsh, fish, powershell, cmd, auto.",
+    )

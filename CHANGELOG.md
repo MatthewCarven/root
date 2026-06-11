@@ -34,3 +34,13 @@ Polish pass after first real use:
 - Broadcasts `WM_SETTINGCHANGE` after registry edits so new shells
   pick up changes without a reboot.
 - Better Windows error handling around `Path.resolve()`.
+
+## Unreleased
+
+- Preview pane: right-side panel showing first-level contents of the
+  highlighted row (dirs first, 40-entry cap, hidden-file aware).
+- New `root uninstall-shell <shell|auto>` subcommand: removes the
+  marker-bounded wrapper from rc/profile files (bash/zsh/powershell),
+  deletes the fish function file, and for cmd.exe strips the doskey
+  entry from AutoRun (deleting the value if nothing else remains) and
+  removes `~/.root/bin/root.cmd`. Safe to re-run; reports what it found.

@@ -353,4 +353,41 @@ class RootApp(App):
     def _enter_bookmark_mode(self, path: Path) -> None:
         self._bookmark_mode = True
         self._pending_bookmark_path = path
-        inp = self.q
+        inp = self.query_one(Input)
+        # path.name is empty at filesystem roots (e.g. Path("C:\\").name
+        # == ""). Fall back to a sanitised drive/path stub so the field
+        # isn't blank -- the user can still overwrite it.
+        default = path.name or path.anchor.rstrip("\\/:") or str(path)
+        inp.value = default
+        inp.placeholder = f"name this bookmark for {path}  (Enter to save, Esc to cancel)"
+        self.query_one("#status", Static).update(
+            f"[yellow]bookmarking[/yellow] {path} — enter a name"
+        )
+
+    def _finalize_bookmark(self) -> None:
+        inp = self.query_one(Input)
+        name = inp.value.strip()
+        if name and self._pending_bookmark_path is not None:
+            self.bookmarks.add(name, self._pending_bookmark_path)
+            self.bookmarks.save()
+        self._bookmark_mode = False
+        self._pending_bookmark_path = None
+        inp.value = ""
+        inp.placeholder = "type to fuzzy-search — or arrow keys to browse"
+        self.query = ""
+        self._refresh()
+
+
+def run_app(start_dir: Optional[Path] = None) -> Optional[Path]:
+    """Launch the TUI. Returns the chosen path, or None if cancelled."""
+    config = Config.load()
+    bookmarks = Bookmarks.load()
+    history = History.load()
+    app = RootApp(
+        config=config,
+        bookmarks=bookmarks,
+        history=history,
+        start_dir=(start_dir or Path.cwd()).resolve(),
+    )
+    app.run()
+    return app.committed_path

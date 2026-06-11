@@ -24,8 +24,8 @@
       user PATH via winreg.
 - [ ] Print a one-line post-install hint after `pip install root-cli`
       pointing at `root install-shell auto`.
-- [ ] `root uninstall-shell` for symmetry (find marker block, delete
-      it; for cmd, remove the bin dir from user PATH).
+- [x] `root uninstall-shell` for symmetry (find marker block, delete
+      it; for cmd, strip the doskey AutoRun entry and root.cmd).
 - [ ] Source the rc/profile automatically when possible (currently we
       print the `source` command for the user to run — there's no
       portable way to mutate the parent shell from Python).
@@ -41,15 +41,16 @@
 - No tests yet for the Textual UI itself (Textual's pilot harness
   would let us add some).
 
-## State at 2026-06-11 session end
+## State at 2026-06-11 (second session)
 
-- Preview pane is implemented and committed (`3b4b224`), 58/58 tests
-  green, verified headless via Textual pilot.
-- **Matthew: field-test the preview pane** — run `root`, check
-  proportions (list 2fr / pane 1fr), border, and feel at your usual
-  window size. Report anything off and we'll polish.
-- **Matthew: push** — two unpushed commits on main (`be69b39`
-  housekeeping, `3b4b224` preview pane).
-- Likely next item after field test: `root uninstall-shell` (well
-  scoped, mirrors install-shell), or the pip post-install hint
-  (needs investigation — wheels lack post-install hooks).
+- Preview pane field-tested by Matthew on Windows Terminal: approved
+  as-is, no polish requested. It already caught one mis-set bookmark.
+- `root uninstall-shell` implemented and committed. 74/74 tests green.
+- **Matthew: push** -- unpushed commits on main (housekeeping, preview
+  pane, uninstall-shell).
+- **Matthew: optional field check** -- run `root uninstall-shell cmd`
+  then `root install-shell cmd` to confirm the AutoRun roundtrip on
+  real Windows (sandbox tests mock winreg paths only at the merge/
+  unmerge string level).
+- Likely next: pip post-install hint (needs investigation -- wheels
+  lack post-install hooks) or `.gitignore`-aware tree browsing.
