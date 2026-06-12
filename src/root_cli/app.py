@@ -8,9 +8,13 @@ UX:
 Keys:
 - Enter         Commit highlighted candidate (and cd there). On the
                 ".." row, ascend the browse view instead of committing.
-- Right         Descend into highlighted directory (browse w/o commit).
-- Shift+Enter   Same as Right -- descend without committing/exiting.
-- Left          Go up one directory.
+- Right         With the cursor at the end of the search text (or the
+                box empty): descend into the highlighted directory
+                (browse w/o commit). Mid-text: moves the cursor.
+- Shift+Enter   Always descend, regardless of cursor position.
+- Left          With the cursor at the start of the search text (or the
+                box empty): go up one directory. Mid-text: moves the
+                cursor.
 - Ctrl+B        Bookmark the highlighted directory (asks for a name).
 - Ctrl+D        Delete the highlighted entry: removes a bookmark (*) or
                 forgets a recent (~), depending on the row.
@@ -45,6 +49,30 @@ from root_cli.candidates import (
 )
 from root_cli.config import Bookmarks, Config
 from root_cli.history import History
+
+
+class _SearchInput(Input):
+    """Search box whose arrow keys fall through to navigation at the edges.
+
+    A plain Input swallows left/right unconditionally, which makes the
+    footer's "<- up" hint a lie whenever the box has text. Instead:
+    pressing left with the cursor already at position 0 ascends, and
+    pressing right with the cursor already at the end of the text
+    descends. Anywhere mid-text they move the cursor as usual, so no
+    editing ability is lost. Shift+arrow (selection) is never hijacked.
+    """
+
+    def action_cursor_left(self, select: bool = False) -> None:
+        if not select and self.cursor_position == 0:
+            self.app.action_ascend()  # type: ignore[attr-defined]
+            return
+        super().action_cursor_left(select)
+
+    def action_cursor_right(self, select: bool = False) -> None:
+        if not select and self.cursor_position >= len(self.value):
+            self.app.action_descend()  # type: ignore[attr-defined]
+            return
+        super().action_cursor_right(select)
 
 
 class _CandidateRow(ListItem):
@@ -127,7 +155,7 @@ class RootApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield Input(placeholder="type to fuzzy-search — or arrow keys to browse")
+        yield _SearchInput(placeholder="type to fuzzy-search — or arrow keys to browse")
         yield Static("", id="status", classes="prompt")
         with Horizontal(id="main"):
             yield ListView()

@@ -38,8 +38,8 @@
 - The tree browser dereferences symlinks at display time, which may
   surprise users on macOS (`~/Documents` → `~/Library/...`). Consider
   a config flag to disable resolve().
-- No tests yet for the Textual UI itself (Textual's pilot harness
-  would let us add some).
+- ~~No tests yet for the Textual UI itself~~ First pilot-harness tests
+  landed (arrow-key edge navigation); coverage of the UI is still thin.
 
 ## State at 2026-06-11 (second session)
 

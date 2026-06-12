@@ -44,3 +44,6 @@ Polish pass after first real use:
   deletes the fish function file, and for cmd.exe strips the doskey
   entry from AutoRun (deleting the value if nothing else remains) and
   removes `~/.root/bin/root.cmd`. Safe to re-run; reports what it found.
+- Context-sensitive arrow keys in the search box: left at cursor
+  position 0 ascends, right at end-of-text descends; mid-text they
+  move the cursor as a normal Input. Shift+arrow selection untouched.

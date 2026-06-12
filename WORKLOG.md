@@ -179,3 +179,18 @@ rebase in a local clone under /tmp and syncing the result back via
 fetch + update-ref + index rebuild. Rule of thumb going forward:
 commit on the mount is fine; anything index-churny (rebase, merge)
 should be done in a /tmp clone.
+
+## 2026-06-12 — Context-sensitive arrows
+
+Matthew flagged that the left arrow "gets swallowed by the input box"
+but didn't want to lose cursor movement — and concluded he was asking
+for the impossible. He wasn't: the fzf-style resolution is to make the
+arrows edge-sensitive. New `_SearchInput(Input)` subclass overrides
+`action_cursor_left/right`: left at cursor position 0 → ascend; right
+at end-of-text → descend; anywhere mid-text → normal cursor movement.
+Shift+arrow (selection) is never hijacked. No keystroke changed
+meaning — the hijacked positions were no-ops before.
+
+Also the first committed Textual pilot tests (tests/test_app.py, 5 of
+them), using plain `asyncio.run` so no pytest-asyncio dependency.
+Tests 74 → 79.
