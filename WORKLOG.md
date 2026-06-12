@@ -159,3 +159,23 @@ ampersand cases, unknown-shell dispatch).
 
 Not runnable end-to-end here (winreg is Windows-only); flagged a
 one-minute AutoRun roundtrip check for Matthew in TODO.
+
+## 2026-06-12 — Push rejection: diverged remote, rebased
+
+Matthew's push bounced: origin/main had `b2daaad` ("Update image in
+README.md", made via the GitHub web UI on 2026-05-24) that local
+history didn't include. Not the venv — a venv never affects git.
+
+Resolution: rebased our 4 commits onto `b2daaad`. One expected
+conflict (README.md whole-file, because the line-ending normalization
+in the working-agreement commit collides with the image edit) —
+resolved by taking the normalized LF version and re-applying the new
+image line. New tip `8ced80c`; all 74 tests green post-rebase.
+
+Sandbox notes: the mounted repo's git index corrupted repeatedly
+("bad signature 0x00000000") during rebase attempts, plus a zeroed
+ORIG_HEAD and a stale rebase-merge dir. Worked around by doing the
+rebase in a local clone under /tmp and syncing the result back via
+fetch + update-ref + index rebuild. Rule of thumb going forward:
+commit on the mount is fine; anything index-churny (rebase, merge)
+should be done in a /tmp clone.
