@@ -254,3 +254,24 @@ history tests incl. old-format load). All green. Docs: README preview
 section, CHANGELOG, app.py key table, TODO phase-1 ticked. Flagged a
 field-test for Matthew in TODO. Phase 2 (LAUNCH fuzzy source) still
 queued.
+
+## 2026-09-20 — "History not recording" report: false alarm, display dedupe
+
+Matthew field-tested the pane (00:22) and reported main-view Enter no
+longer adds to history. Investigated: history.json HAS all three of
+his 00:22 test visits, written by the NEW code (the `launches` key is
+present), timestamps matching his Enters 10s apart. Harness sweep of
+every commit flow (default enter, arrows+enter, typed query+enter,
+descend+'.', preview-dir enter, bookmark row) all record correctly.
+
+Root cause of the perception: `_default_view`'s dedupe (unchanged
+since 0.1.x) hides exactly the rows he was watching for — the dir you
+just cd'd into is the one you're standing in when you reopen root, so
+it's covered by the '.' row; and -=Programming=- is bookmarked, so it
+shows as '*' not '~'. Net effect: after a test cd, the recents strip
+looks identical. Nothing regressed; `root recent` shows the truth.
+
+Repro-script blooper: the flow sweep called the real launcher once and
+popped Notepad on Matthew's desktop (he closed it). Mock launch_path
+in any future scratch repros. On the plus side: real-machine proof
+that os.startfile launching works.
