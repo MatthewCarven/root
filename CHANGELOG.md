@@ -47,3 +47,17 @@ Polish pass after first real use:
 - Context-sensitive arrow keys in the search box: left at cursor
   position 0 ascends, right at end-of-text descends; mid-text they
   move the cursor as a normal Input. Shift+arrow selection untouched.
+- Interactive preview pane: Tab focuses it (Shift+Tab / ← back),
+  ↑/↓ pick an entry. Enter on a directory commits (cd & exit); Enter
+  on a file launches it via the OS default handler and the TUI stays
+  open. Shift+Enter / → on a directory descends the browser into it.
+- Launch memory: files opened from the preview pane are recorded in a
+  new `launches` section of history.json (frecency-tracked, kept
+  separate so they never rank as cd targets), and the file's folder
+  gets a normal history visit. Groundwork for a future launch-history
+  fuzzy-search source.
+- Compat fix: `Input.action_cursor_left/right` signature differs
+  across Textual releases (no `select` parameter before ~0.76); the
+  search box now checks the installed signature, fixing mid-text
+  arrow keys crashing on textual 0.71.0 (found when the dev machine's
+  environment drifted to py3.14 + textual 0.71.0).

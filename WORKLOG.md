@@ -219,3 +219,38 @@ app-level bindings that query_one(ListView) — assumes exactly one
 ListView, so the second list needs ids and pane-aware routing.
 Full step list in TODO.md under "Planned — Tab-able preview pane".
 Not implemented yet — plan only this session.
+
+## 2026-09-20 — Implemented: interactive preview pane (phase 1)
+
+The preview pane is now a real ListView you can Tab into. As designed:
+Tab toggles search<->preview (Shift+Tab or left always returns; left-
+as-return because ascending the browse dir while inspecting a
+*different* dir's contents would be disorienting). Enter on a dir
+commits (cd & exit); Enter on a file launches via the OS default
+handler and the TUI stays open; Shift+Enter / right on a dir descends
+the browser into it, keeping focus in the pane so you can drill
+repeatedly. Launches are remembered: file -> new `launches` section in
+history.json (frecency, pruned, never ranked as cd targets), parent
+dir -> normal visit. New module launch.py (os.startfile / open /
+xdg-open, non-blocking, error string back to the status line).
+
+Structural: preview_entries now returns PreviewEntry records
+(name/path/is_dir; marker rows carry no path and no-op on Enter); the
+two ListViews got ids (#results / #preview) and every
+query_one(ListView) call site was fixed; highlight events are filtered
+by list id so preview-internal cursor moves don't rebuild the pane;
+ctrl+b now refocuses the input (it can fire from the pane). Focus cue:
+thick accent border-left on the pane via :focus-within.
+
+Surprise find: the dev machine's env drifted to py3.14 + textual
+0.71.0, where Input.action_cursor_left/right take no `select` param —
+mid-text arrows CRASHED on current HEAD (3 pre-existing test failures,
+confirmed on a clean stash). Added a signature-sniffing compat shim in
+_SearchInput. Deviation from plan, noted per working agreement: fixing
+it was load-bearing for the suite, not scope creep.
+
+Tests 79 -> 88 (7 new pilot tests incl. marker-row no-op; 3 new
+history tests incl. old-format load). All green. Docs: README preview
+section, CHANGELOG, app.py key table, TODO phase-1 ticked. Flagged a
+field-test for Matthew in TODO. Phase 2 (LAUNCH fuzzy source) still
+queued.

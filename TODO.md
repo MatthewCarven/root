@@ -39,29 +39,31 @@ and stays open (mirrors the main list's Shift+Enter). Enter on a file
 launches it via the OS default handler and the TUI **stays open**;
 launched files are remembered for a future launch-history source.
 
-Phase 1 (the pane itself):
+Phase 1 (the pane itself) — DONE 2026-09-20:
 
-- [ ] `preview_entries` → structured records (name, path, is_dir)
+- [x] `preview_entries` → structured records (name, path, is_dir)
       instead of bare strings; keep `<empty>` / `<permission denied>` /
       `+N more` as non-interactive rows. Update tests.
-- [ ] Replace the `#preview` Static with a ListView; give the main
+- [x] Replace the `#preview` Static with a ListView; give the main
       list an id (`#results`) and fix every `query_one(ListView)` call
       site (they assume exactly one ListView today).
-- [ ] Tab toggles focus search↔preview (visible focus cue on the
+- [x] Tab toggles focus search↔preview (visible focus cue on the
       pane); Shift+Tab returns; Esc keeps meaning quit everywhere.
-- [ ] Route up/down + Enter/Shift+Enter by which pane is focused
+- [x] Route up/down + Enter/Shift+Enter by which pane is focused
       (`ListView.Selected` carries `event.list_view`; `action_descend`
       becomes pane-aware).
-- [ ] Cross-platform launcher helper: `os.startfile` (win) /
+- [x] Cross-platform launcher helper: `os.startfile` (win) /
       `open` (mac) / `xdg-open` (linux), non-blocking, errors to the
       status line.
-- [ ] On file launch: record the file's parent dir as a normal
+- [x] On file launch: record the file's parent dir as a normal
       history visit, and the file itself in a new `launches` section
       of history.json (schema-compatible: unknown keys ignored by old
       versions).
-- [ ] Docstring key table, status/footer hints, README key list.
-- [ ] Pilot-harness tests: tab focus, enter-on-dir commit,
+- [x] Docstring key table, status/footer hints, README key list.
+- [x] Pilot-harness tests: tab focus, enter-on-dir commit,
       shift+enter descend, file-launch stays open (launcher mocked).
+- [ ] Matthew: field-test the pane on Windows Terminal (Tab in, launch
+      a file, Shift+Enter drill-down) — pilot tests can't see rendering.
 
 Phase 2 (launch memory, later session):
 

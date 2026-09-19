@@ -28,10 +28,29 @@ class HistoryEntry:
 
 
 class History:
-    def __init__(self, entries: Dict[str, HistoryEntry] | None = None):
+    def __init__(
+        self,
+        entries: Dict[str, HistoryEntry] | None = None,
+        launches: Dict[str, HistoryEntry] | None = None,
+    ):
         self.entries: Dict[str, HistoryEntry] = entries or {}
+        # Files opened from the TUI preview pane. Kept separate from
+        # `entries` so launched files never rank as cd targets.
+        self.launches: Dict[str, HistoryEntry] = launches or {}
 
     # ----- persistence -----
+
+    @staticmethod
+    def _parse_entries(items) -> Dict[str, HistoryEntry]:
+        return {
+            str(item["path"]): HistoryEntry(
+                path=str(item["path"]),
+                freq=float(item.get("freq", 1.0)),
+                last_seen=float(item.get("last_seen", time.time())),
+            )
+            for item in items
+            if "path" in item
+        }
 
     @classmethod
     def load(cls) -> "History":
@@ -42,37 +61,37 @@ class History:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return cls()
-        entries = {
-            str(item["path"]): HistoryEntry(
-                path=str(item["path"]),
-                freq=float(item.get("freq", 1.0)),
-                last_seen=float(item.get("last_seen", time.time())),
-            )
-            for item in data.get("entries", [])
-            if "path" in item
-        }
-        return cls(entries=entries)
+        return cls(
+            entries=cls._parse_entries(data.get("entries", [])),
+            # Absent in files written by older versions — that's fine.
+            launches=cls._parse_entries(data.get("launches", [])),
+        )
+
+    def _prune(self, store: Dict[str, HistoryEntry]) -> Dict[str, HistoryEntry]:
+        if len(store) <= MAX_ENTRIES:
+            return store
+        ranked = sorted(
+            store.values(),
+            key=lambda e: self._frecency(e, time.time()),
+            reverse=True,
+        )
+        return {e.path: e for e in ranked[:MAX_ENTRIES]}
 
     def save(self) -> None:
         ensure_config_dir()
         # Prune to keep the file bounded.
-        if len(self.entries) > MAX_ENTRIES:
-            # Drop lowest-frecency entries.
-            ranked = sorted(
-                self.entries.values(),
-                key=lambda e: self._frecency(e, time.time()),
-                reverse=True,
-            )
-            self.entries = {e.path: e for e in ranked[:MAX_ENTRIES]}
+        self.entries = self._prune(self.entries)
+        self.launches = self._prune(self.launches)
+
+        def dump(store: Dict[str, HistoryEntry]):
+            return [
+                {"path": e.path, "freq": e.freq, "last_seen": e.last_seen}
+                for e in store.values()
+            ]
 
         history_path().write_text(
             json.dumps(
-                {
-                    "entries": [
-                        {"path": e.path, "freq": e.freq, "last_seen": e.last_seen}
-                        for e in self.entries.values()
-                    ]
-                },
+                {"entries": dump(self.entries), "launches": dump(self.launches)},
                 indent=2,
             ),
             encoding="utf-8",
@@ -80,16 +99,24 @@ class History:
 
     # ----- updates -----
 
-    def visit(self, path: Path, now: float | None = None) -> None:
-        """Record a visit. Increments frequency, refreshes last-seen."""
+    @staticmethod
+    def _bump(store: Dict[str, HistoryEntry], path: Path, now: float | None) -> None:
         key = str(Path(path).expanduser().resolve())
         ts = time.time() if now is None else now
-        e = self.entries.get(key)
+        e = store.get(key)
         if e is None:
-            self.entries[key] = HistoryEntry(path=key, freq=1.0, last_seen=ts)
+            store[key] = HistoryEntry(path=key, freq=1.0, last_seen=ts)
         else:
             e.freq += 1.0
             e.last_seen = ts
+
+    def visit(self, path: Path, now: float | None = None) -> None:
+        """Record a directory visit. Increments frequency, refreshes last-seen."""
+        self._bump(self.entries, path, now)
+
+    def record_launch(self, path: Path, now: float | None = None) -> None:
+        """Record a file launched from the TUI (frecency, like visits)."""
+        self._bump(self.launches, path, now)
 
     def forget(self, path: Path) -> bool:
         key = str(Path(path).expanduser().resolve())

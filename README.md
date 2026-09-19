@@ -125,6 +125,23 @@ The default cursor position is smart:
 - **Ctrl+H** is an alias for **Ctrl+D** (kept for muscle-memory).
 - **Esc** quits without changing dir.
 
+### The preview pane
+
+The right-hand pane always shows the first-level contents of whatever
+directory is highlighted. It's interactive:
+
+- **Tab** moves focus into the pane (Tab again, **Shift+Tab**, or **←**
+  goes back to the search box).
+- ↑/↓ to pick an entry.
+- **Enter** on a directory `cd`s there and exits — same meaning Enter
+  has everywhere. **Enter** on a *file* opens it with your OS's default
+  handler and the TUI **stays open**, so you can open several in a row.
+  Launched files are remembered (the file in launch history, its folder
+  as a normal visit).
+- **Shift+Enter** (or **→**) on a directory descends the browser into
+  it without exiting — the same "stay in the app" meaning it has in the
+  main list.
+
 ### Subcommands (no TUI)
 
 ```sh

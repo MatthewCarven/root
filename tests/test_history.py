@@ -99,6 +99,44 @@ def test_frecency_prefers_recent(tmp_path, isolated_config):
     assert ranked[0][0] == newer.resolve()
 
 
+def test_record_launch_separate_from_visits(tmp_path, isolated_config):
+    h = History()
+    exe = tmp_path / "tool.exe"
+    exe.write_text("x")
+    h.record_launch(exe)
+    h.record_launch(exe)
+    assert len(h.entries) == 0  # launches never pollute cd candidates
+    assert len(h.launches) == 1
+    entry = next(iter(h.launches.values()))
+    assert entry.freq == 2.0
+
+
+def test_launches_round_trip(tmp_path, isolated_config):
+    h = History()
+    exe = tmp_path / "tool.exe"
+    exe.write_text("x")
+    h.visit(tmp_path)
+    h.record_launch(exe)
+    h.save()
+
+    h2 = History.load()
+    assert len(h2.entries) == 1
+    assert len(h2.launches) == 1
+    assert Path(next(iter(h2.launches.values())).path) == exe.resolve()
+
+
+def test_load_old_format_without_launches_key(tmp_path, isolated_config):
+    """History files written before launch memory existed load cleanly."""
+    (tmp_path / "history.json").write_text(
+        json.dumps(
+            {"entries": [{"path": str(tmp_path), "freq": 2.0, "last_seen": 0.0}]}
+        )
+    )
+    h = History.load()
+    assert len(h.entries) == 1
+    assert h.launches == {}
+
+
 def test_pruning_keeps_top_entries(tmp_path, isolated_config, monkeypatch):
     from root_cli import history as history_mod
 

@@ -82,21 +82,41 @@ def _tree_children(directory, show_hidden):
         return
 
 
-def preview_entries(directory: Path, show_hidden: bool, limit: int = 40) -> List[str]:
+@dataclass
+class PreviewEntry:
+    """One row of the TUI preview pane.
+
+    Marker rows ("<empty>", "<permission denied>", "… +N more") carry
+    no path and can't be acted on; real rows carry the child's Path
+    and whether it's a directory.
+    """
+
+    name: str
+    path: Optional[Path] = None
+    is_dir: bool = False
+
+    @property
+    def is_marker(self) -> bool:
+        return self.path is None
+
+
+def preview_entries(
+    directory: Path, show_hidden: bool, limit: int = 40
+) -> List[PreviewEntry]:
     """First-level contents of *directory*, for the TUI preview pane.
 
     Directories first (with a trailing '/'), then files, each group
     sorted case-insensitively. Honors show_hidden the same way the
     tree browser does. Truncated to *limit* entries with a trailing
-    "+N more" marker. Never raises: unreadable dirs come back as a
-    single explanatory line.
+    "+N more" marker row. Never raises: unreadable dirs come back as a
+    single explanatory marker row.
     """
     try:
         entries = list(directory.iterdir())
     except PermissionError:
-        return ["<permission denied>"]
+        return [PreviewEntry(name="<permission denied>")]
     except OSError as exc:
-        return [f"<unreadable: {exc.__class__.__name__}>"]
+        return [PreviewEntry(name=f"<unreadable: {exc.__class__.__name__}>")]
     if not show_hidden:
         entries = [e for e in entries if not e.name.startswith(".")]
     dirs: List[Path] = []
@@ -106,13 +126,19 @@ def preview_entries(directory: Path, show_hidden: bool, limit: int = 40) -> List
             (dirs if e.is_dir() else files).append(e)
         except OSError:
             files.append(e)
-    names = [d.name + "/" for d in sorted(dirs, key=lambda p: p.name.lower())]
-    names += [f.name for f in sorted(files, key=lambda p: p.name.lower())]
-    if not names:
-        return ["<empty>"]
-    if len(names) > limit:
-        names = names[:limit] + [f"… +{len(names) - limit} more"]
-    return names
+    out = [
+        PreviewEntry(name=d.name + "/", path=d, is_dir=True)
+        for d in sorted(dirs, key=lambda p: p.name.lower())
+    ]
+    out += [
+        PreviewEntry(name=f.name, path=f, is_dir=False)
+        for f in sorted(files, key=lambda p: p.name.lower())
+    ]
+    if not out:
+        return [PreviewEntry(name="<empty>")]
+    if len(out) > limit:
+        out = out[:limit] + [PreviewEntry(name=f"… +{len(out) - limit} more")]
+    return out
 
 
 def _glob_search_roots(roots):

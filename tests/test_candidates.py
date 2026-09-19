@@ -206,29 +206,39 @@ def test_self_entry_path_is_browse_dir(tmp_path, isolated_config):
 from root_cli.candidates import preview_entries  # noqa: E402
 
 
+def _names(entries):
+    return [e.name for e in entries]
+
+
 def test_preview_dirs_first_then_files_sorted(tmp_path):
     (tmp_path / "zeta").mkdir()
     (tmp_path / "Alpha").mkdir()
     (tmp_path / "notes.txt").write_text("x")
     (tmp_path / "BUILD").write_text("x")
-    assert preview_entries(tmp_path, show_hidden=False) == [
-        "Alpha/",
-        "zeta/",
-        "BUILD",
-        "notes.txt",
-    ]
+    out = preview_entries(tmp_path, show_hidden=False)
+    assert _names(out) == ["Alpha/", "zeta/", "BUILD", "notes.txt"]
+    # Rows carry their Path and dir-ness so the pane can act on them.
+    assert out[0].is_dir and out[0].path == tmp_path / "Alpha"
+    assert not out[3].is_dir and out[3].path == tmp_path / "notes.txt"
+    assert not any(e.is_marker for e in out)
 
 
 def test_preview_hides_dotfiles_unless_show_hidden(tmp_path):
     (tmp_path / ".git").mkdir()
     (tmp_path / ".env").write_text("x")
     (tmp_path / "src").mkdir()
-    assert preview_entries(tmp_path, show_hidden=False) == ["src/"]
-    assert preview_entries(tmp_path, show_hidden=True) == [".git/", "src/", ".env"]
+    assert _names(preview_entries(tmp_path, show_hidden=False)) == ["src/"]
+    assert _names(preview_entries(tmp_path, show_hidden=True)) == [
+        ".git/",
+        "src/",
+        ".env",
+    ]
 
 
 def test_preview_empty_dir(tmp_path):
-    assert preview_entries(tmp_path, show_hidden=False) == ["<empty>"]
+    out = preview_entries(tmp_path, show_hidden=False)
+    assert _names(out) == ["<empty>"]
+    assert out[0].is_marker
 
 
 def test_preview_truncates_with_more_marker(tmp_path):
@@ -236,11 +246,13 @@ def test_preview_truncates_with_more_marker(tmp_path):
         (tmp_path / f"f{i:02d}").write_text("x")
     out = preview_entries(tmp_path, show_hidden=False, limit=40)
     assert len(out) == 41
-    assert out[-1] == "… +5 more"
-    assert out[0] == "f00"
+    assert out[-1].name == "… +5 more"
+    assert out[-1].is_marker
+    assert out[0].name == "f00"
 
 
 def test_preview_missing_dir_does_not_raise(tmp_path):
     out = preview_entries(tmp_path / "nope", show_hidden=False)
     assert len(out) == 1
-    assert out[0].startswith("<unreadable:")
+    assert out[0].name.startswith("<unreadable:")
+    assert out[0].is_marker
