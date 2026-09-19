@@ -194,3 +194,28 @@ meaning — the hijacked positions were no-ops before.
 Also the first committed Textual pilot tests (tests/test_app.py, 5 of
 them), using plain `asyncio.run` so no pytest-asyncio dependency.
 Tests 74 → 79.
+
+## 2026-09-20 — Designed: Tab-able preview pane (files launchable)
+
+Matthew wants the preview pane interactive: Tab to enter it, up/down
+to pick an entry, Enter to act. Design settled together:
+
+- Enter on a dir in the pane = commit (cd & exit). Root is "foremost
+  a replacement for cd" — Enter always means "take me there".
+- Shift+Enter = the same intent but *stay in the app* (descend the
+  browser into that dir), consistent with the main list's Shift+Enter.
+- Enter on a file = launch via OS default handler; TUI stays open
+  (Matthew's explicit choice) so several files can be opened in a row.
+- Launched executables get *remembered*: parent dir as a normal
+  history visit + the file itself in a new `launches` history section,
+  feeding a future LAUNCH fuzzy-search source (phase 2).
+- Matthew mentioned root may one day be embedded on a RAM-based disk
+  image — keep the launcher OS-handler-based (no hardcoded app paths)
+  and noted the absolute-paths-in-history portability question in TODO.
+
+Implementation notes from source inspection: #preview is a Static
+(not focusable); preview_entries returns bare strings; up/down are
+app-level bindings that query_one(ListView) — assumes exactly one
+ListView, so the second list needs ids and pane-aware routing.
+Full step list in TODO.md under "Planned — Tab-able preview pane".
+Not implemented yet — plan only this session.

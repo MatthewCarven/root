@@ -30,6 +30,62 @@
       print the `source` command for the user to run — there's no
       portable way to mutate the parent shell from Python).
 
+## Planned — Tab-able preview pane (designed with Matthew, 2026-09-20)
+
+Goal: Tab focuses the right-hand preview pane; up/down pick an entry;
+Enter acts on it. Enter on a dir commits (cd & exit — root is foremost
+a cd replacement); Shift+Enter on a dir descends the browser into it
+and stays open (mirrors the main list's Shift+Enter). Enter on a file
+launches it via the OS default handler and the TUI **stays open**;
+launched files are remembered for a future launch-history source.
+
+Phase 1 (the pane itself):
+
+- [ ] `preview_entries` → structured records (name, path, is_dir)
+      instead of bare strings; keep `<empty>` / `<permission denied>` /
+      `+N more` as non-interactive rows. Update tests.
+- [ ] Replace the `#preview` Static with a ListView; give the main
+      list an id (`#results`) and fix every `query_one(ListView)` call
+      site (they assume exactly one ListView today).
+- [ ] Tab toggles focus search↔preview (visible focus cue on the
+      pane); Shift+Tab returns; Esc keeps meaning quit everywhere.
+- [ ] Route up/down + Enter/Shift+Enter by which pane is focused
+      (`ListView.Selected` carries `event.list_view`; `action_descend`
+      becomes pane-aware).
+- [ ] Cross-platform launcher helper: `os.startfile` (win) /
+      `open` (mac) / `xdg-open` (linux), non-blocking, errors to the
+      status line.
+- [ ] On file launch: record the file's parent dir as a normal
+      history visit, and the file itself in a new `launches` section
+      of history.json (schema-compatible: unknown keys ignored by old
+      versions).
+- [ ] Docstring key table, status/footer hints, README key list.
+- [ ] Pilot-harness tests: tab focus, enter-on-dir commit,
+      shift+enter descend, file-launch stays open (launcher mocked).
+
+Phase 2 (launch memory, later session):
+
+- [ ] LAUNCH candidate source: frecent launched files surface in
+      fuzzy search (icon `!`?); Enter launches them from the main
+      list. Keeps cd candidates clean — files never rank as cd
+      targets.
+- [ ] RAM-disk / portable-image consideration: history stores
+      absolute paths; if root ever ships embedded on a mounted image,
+      paths may shift per mount. Investigate storing paths relative
+      to a configurable anchor.
+
+## Bugs / to investigate
+
+- [ ] `uninstall-shell powershell` may miss the wrapper. Matthew reported
+      it not taking effect (2026-06-15). Two suspects: (1) benign — the
+      function was removed but bare `root.exe` on PATH still launches the
+      TUI, so it *looks* un-removed; (2) real — `$PROFILE` is per-edition
+      / per-host, so install and uninstall can target different files
+      (pwsh ConsoleHost vs Windows PowerShell 5.1 `WindowsPowerShell\` vs
+      VS Code host). Fix: sweep all known PS profile paths on uninstall,
+      the way bash/zsh already sweep multiple rc files. cmd uninstall
+      confirmed working.
+
 ## Known limitations
 
 - cmd.exe install is awkward because `pip install` puts `root.exe` on
