@@ -33,6 +33,10 @@ recent_limit = 10
 
 # Whether to show hidden (dot) directories in the tree browser.
 show_hidden = false
+
+# Milliseconds the cursor must rest on a row before the preview pane
+# lists it. Keeps holding up/down smooth. 0 = update instantly.
+preview_delay_ms = 333
 """
 
 
@@ -42,6 +46,7 @@ class Config:
     max_results: int = 50
     recent_limit: int = 10
     show_hidden: bool = False
+    preview_delay_ms: int = 333
 
     @classmethod
     def load(cls) -> "Config":
@@ -58,6 +63,7 @@ class Config:
             max_results=int(data.get("max_results", 50)),
             recent_limit=int(data.get("recent_limit", 10)),
             show_hidden=bool(data.get("show_hidden", False)),
+            preview_delay_ms=max(0, int(data.get("preview_delay_ms", 333))),
         )
 
     def save(self) -> None:
@@ -69,6 +75,7 @@ class Config:
                     "max_results": self.max_results,
                     "recent_limit": self.recent_limit,
                     "show_hidden": self.show_hidden,
+                    "preview_delay_ms": self.preview_delay_ms,
                 }
             ).encode("utf-8")
         )

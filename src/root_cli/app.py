@@ -4,9 +4,10 @@ UX:
 - Top: an Input where you type to filter.
 - Middle-left: a ListView of ranked candidates from all sources.
 - Middle-right: a preview pane listing the highlighted dir's contents.
-  Cursor moves update it once the cursor rests (PREVIEW_DELAY, 333ms),
-  so holding up/down stays smooth; typing and navigating update it at
-  once, and Tab never makes you wait.
+  Cursor moves update it once the cursor rests (config
+  preview_delay_ms, default 333), so holding up/down stays smooth;
+  typing and navigating update it at once, and Tab never makes you
+  wait.
 - Bottom: a footer of keybindings.
 
 Keys:
@@ -183,11 +184,6 @@ class RootApp(App):
         Binding("down", "cursor_down", show=False),
     ]
 
-    # Seconds the results cursor must rest before the preview pane
-    # rebuilds. Holding up/down would otherwise list every dir on the
-    # way past, which makes the main list stutter.
-    PREVIEW_DELAY = 0.333
-
     query: reactive[str] = reactive("")
     browse_dir: reactive[Path] = reactive(Path.cwd())
     _bookmark_mode: bool = False
@@ -214,6 +210,10 @@ class RootApp(App):
         self._preview_entries: List[PreviewEntry] = []
         self._previewed: Optional[Path] = None  # candidate path the pane shows
         self._preview_timer: Optional[Timer] = None
+        # Seconds the results cursor must rest before the preview pane
+        # rebuilds. Holding up/down would otherwise list every dir on
+        # the way past, which makes the main list stutter.
+        self._preview_delay = config.preview_delay_ms / 1000
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -305,9 +305,12 @@ class RootApp(App):
         # restarts the delay, so a held arrow key previews once, at the
         # row it stops on.
         if event.list_view.id == "results" and not self._bookmark_mode:
+            if self._preview_delay <= 0:
+                self._update_preview()
+                return
             self._cancel_preview_timer()
             self._preview_timer = self.set_timer(
-                self.PREVIEW_DELAY, self._preview_settled
+                self._preview_delay, self._preview_settled
             )
 
     def _default_cursor_index(self) -> Optional[int]:

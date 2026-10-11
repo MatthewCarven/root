@@ -62,7 +62,8 @@ Polish pass after first real use:
   arrow keys crashing on textual 0.71.0 (found when the dev machine's
   environment drifted to py3.14 + textual 0.71.0).
 - Preview pane is debounced on cursor moves: it rebuilds once the
-  results cursor has rested for 333ms (`RootApp.PREVIEW_DELAY`), so a
+  results cursor has rested for 333ms (`preview_delay_ms` in
+  config.toml; 0 restores instant updates), so a
   held ↑/↓ no longer lists every directory on the way past. Typing and
   navigating still update it at once; Tab flushes a pending update so
   you never step into a stale listing.

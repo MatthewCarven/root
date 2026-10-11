@@ -4,7 +4,7 @@ We use platformdirs so the right place is chosen on each OS:
 
 - Linux:   ~/.config/root/
 - macOS:   ~/Library/Application Support/root/
-- Windows: %APPDATA%\\root\\
+- Windows: %LOCALAPPDATA%\\root\\
 """
 from __future__ import annotations
 

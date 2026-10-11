@@ -296,3 +296,20 @@ timer fires; not worth handling.
 Tests 88 -> 91: delay holds then fires; Tab mid-delay flushes and
 Enter commits the right dir; navigation stays instant. Verified the
 delay test fails against the old app.py.
+
+## 2026-10-11 — preview_delay_ms config setting
+
+Matthew asked for the delay to be a setting. `preview_delay_ms`
+(default 333) in config.toml replaces the RootApp.PREVIEW_DELAY class
+constant; negative values clamp to 0, and 0 skips the timer entirely
+(instant preview, the pre-debounce behaviour). Older config files
+without the key get the default. Added the commented key to the seeded
+default config and to Matthew's live config at
+%LOCALAPPDATA%/root/config.toml so he can find it.
+
+Doc drift fixed in passing: README and paths.py said the Windows config
+dir is %APPDATA%; platformdirs (non-roaming) actually puts it under
+%LOCALAPPDATA%, which is where Matthew's file is.
+
+Tests 91 -> 94: zero-delay instant preview, config default/roundtrip,
+missing-key default and negative clamp.

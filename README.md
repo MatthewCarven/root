@@ -130,7 +130,8 @@ The default cursor position is smart:
 The right-hand pane always shows the first-level contents of whatever
 directory is highlighted. While you move the cursor it waits until
 the cursor rests for a third of a second before listing, so holding
-↑/↓ stays smooth (Tab skips the wait). It's interactive:
+↑/↓ stays smooth (Tab skips the wait; tune it with `preview_delay_ms`
+in `config.toml`). It's interactive:
 
 - **Tab** moves focus into the pane (Tab again, **Shift+Tab**, or **←**
   goes back to the search box).
@@ -161,7 +162,7 @@ Run `root config` to see where your files live. The defaults:
 
 - Linux:   `~/.config/root/`
 - macOS:   `~/Library/Application Support/root/`
-- Windows: `%APPDATA%\root\`
+- Windows: `%LOCALAPPDATA%\root\`
 
 Override with `$ROOT_CONFIG_DIR`.
 
@@ -178,6 +179,10 @@ recent_limit = 10
 
 # Include dot-directories in the tree browser.
 show_hidden = false
+
+# How long (ms) the cursor must rest before the preview pane updates.
+# 0 = update instantly.
+preview_delay_ms = 333
 ```
 
 `bookmarks.toml`:

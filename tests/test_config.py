@@ -58,3 +58,21 @@ def test_bookmarks_items_sorted(tmp_path, isolated_config):
         bm.add(name, d)
     names = [n for n, _ in bm.items()]
     assert names == sorted(names)
+
+
+def test_preview_delay_default_and_roundtrip(isolated_config):
+    assert Config.load().preview_delay_ms == 333
+    cfg = Config.load()
+    cfg.preview_delay_ms = 500
+    cfg.save()
+    assert Config.load().preview_delay_ms == 500
+
+
+def test_preview_delay_missing_or_negative(isolated_config):
+    # Configs written before the key existed get the default; a
+    # negative value is clamped to 0 (instant) rather than crashing.
+    path = isolated_config / "config.toml"
+    path.write_text("show_hidden = false\n", encoding="utf-8")
+    assert Config.load().preview_delay_ms == 333
+    path.write_text("preview_delay_ms = -50\n", encoding="utf-8")
+    assert Config.load().preview_delay_ms == 0
