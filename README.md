@@ -85,11 +85,19 @@ root uninstall-shell auto        # or bash / zsh / fish / powershell / cmd
 pip uninstall root-cli
 ```
 
-`uninstall-shell` removes exactly what `install-shell` added: the marked
-block in your rc file or `$PROFILE`, the fish function file, or (for
-cmd.exe) the doskey AutoRun entry and `root.cmd`. It's safe to re-run
-and reports what it found. Open a new shell afterwards; the current one
-still has the old function loaded.
+`uninstall-shell` removes what `install-shell` added: the marked block
+in your rc files, the fish function file, or (for cmd.exe) the doskey
+AutoRun entry and `root.cmd`. For PowerShell it checks every profile of
+both editions (Windows PowerShell 5.1 and PowerShell 7, console, VS
+Code and ISE), and also removes exact copies of the wrapper that were
+appended by hand with `root init-shell powershell >> $PROFILE`. If it
+finds a `root` function it didn't write, it leaves it alone and tells
+you where it is.
+
+It's safe to re-run and reports what it found. Open a new shell
+afterwards; the current one still has the old function loaded. Until
+you `pip uninstall root-cli`, typing `root` still opens the picker
+(via `root.exe`), but it can't change directory any more.
 
 ## Use
 

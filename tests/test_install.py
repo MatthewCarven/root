@@ -310,3 +310,153 @@ class TestUninstallDispatch:
         res = uninstall("tcsh")
         assert not res.success
         assert "Unknown shell" in res.message
+
+
+# ---------------------------------------------------------------------------
+# PowerShell: both editions, every host profile, legacy unmarked copies
+# ---------------------------------------------------------------------------
+
+import subprocess
+
+from root_cli import install as install_mod
+from root_cli.install import _wrapper_text, install_powershell, uninstall_powershell
+
+
+def _legacy_wrapper() -> str:
+    """What `root init-shell powershell >> $PROFILE` appended by hand."""
+    return _wrapper_text("root.ps1")
+
+
+def _marked_wrapper() -> str:
+    return _idempotent_replace("", _wrapper_text("root.ps1"))
+
+
+@pytest.fixture
+def ps_home(tmp_path, monkeypatch):
+    """Fake home with no PowerShell on PATH: uninstall falls back to the
+    standard Documents\\PowerShell + Documents\\WindowsPowerShell dirs."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(install_mod.shutil, "which", lambda _name: None)
+    return tmp_path
+
+
+def _profile(home: Path, edition: str, name: str = "Microsoft.PowerShell_profile.ps1") -> Path:
+    path = home / "Documents" / edition / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+class TestUninstallPowerShell:
+    def test_removes_from_both_editions(self, ps_home):
+        # The reported bug: uninstall only looked at pwsh 7's $PROFILE,
+        # so a wrapper in Windows PowerShell 5.1's profile survived.
+        ps7 = _profile(ps_home, "PowerShell")
+        ps51 = _profile(ps_home, "WindowsPowerShell")
+        ps7.write_text(_marked_wrapper(), encoding="utf-8")
+        ps51.write_text(_marked_wrapper(), encoding="utf-8")
+        res = uninstall_powershell()
+        assert res.success
+        assert ps7.read_text(encoding="utf-8") == ""
+        assert ps51.read_text(encoding="utf-8") == ""
+        assert str(ps7) in res.message and str(ps51) in res.message
+
+    def test_removes_legacy_copy_and_marked_block_together(self, ps_home):
+        # Matthew's real 5.1 profile: a hand-appended copy, then the
+        # marked block install-shell later added beneath it.
+        ps51 = _profile(ps_home, "WindowsPowerShell")
+        ps51.write_text(_legacy_wrapper() + "\n" + _marked_wrapper(), encoding="utf-8")
+        uninstall_powershell()
+        assert ps51.read_text(encoding="utf-8") == ""
+
+    def test_preserves_user_content(self, ps_home):
+        ps7 = _profile(ps_home, "PowerShell")
+        ps7.write_text(
+            "Set-Alias ll Get-ChildItem\n\n" + _legacy_wrapper()
+            + "\n" + _marked_wrapper() + "\n$env:EDITOR = 'code'\n",
+            encoding="utf-8",
+        )
+        uninstall_powershell()
+        text = ps7.read_text(encoding="utf-8")
+        assert "Set-Alias ll Get-ChildItem" in text
+        assert "$env:EDITOR = 'code'" in text
+        assert "function global:root" not in text
+        assert MARKER_BEGIN not in text
+
+    def test_edited_copy_is_left_alone_and_reported(self, ps_home):
+        ps7 = _profile(ps_home, "PowerShell")
+        edited = _legacy_wrapper().replace("Set-Location", "Push-Location")
+        ps7.write_text(edited, encoding="utf-8")
+        res = uninstall_powershell()
+        assert ps7.read_text(encoding="utf-8") == edited  # untouched
+        assert "still defines a `root` function" in res.message
+        assert str(ps7) in res.message
+
+    def test_sweeps_every_host_profile(self, ps_home):
+        names = ["profile.ps1", "Microsoft.VSCode_profile.ps1",
+                 "Microsoft.PowerShellISE_profile.ps1"]
+        paths = [_profile(ps_home, "WindowsPowerShell", n) for n in names]
+        for p in paths:
+            p.write_text(_marked_wrapper(), encoding="utf-8")
+        uninstall_powershell()
+        for p in paths:
+            assert p.read_text(encoding="utf-8") == ""
+
+    def test_utf16_profile_stays_utf16(self, ps_home):
+        # Windows PowerShell 5.1's `>>` writes UTF-16 LE with a BOM.
+        ps51 = _profile(ps_home, "WindowsPowerShell")
+        ps51.write_text("Set-Alias ll Get-ChildItem\n\n" + _legacy_wrapper(), encoding="utf-16")
+        uninstall_powershell()
+        raw = ps51.read_bytes()
+        assert raw.startswith(b"\xff\xfe")
+        text = raw.decode("utf-16")
+        assert "Set-Alias ll Get-ChildItem" in text
+        assert "function global:root" not in text
+
+    def test_asks_powershell_where_profiles_live(self, tmp_path, monkeypatch):
+        # A OneDrive-redirected Documents folder is only knowable by
+        # asking PowerShell; the fallback ~/Documents would miss it.
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+        onedrive = tmp_path / "OneDrive" / "Documents" / "PowerShell"
+        onedrive.mkdir(parents=True)
+        prof = onedrive / "Microsoft.PowerShell_profile.ps1"
+        prof.write_text(_marked_wrapper(), encoding="utf-8")
+        monkeypatch.setattr(
+            install_mod.shutil, "which",
+            lambda name: "pwsh.exe" if name == "pwsh" else None,
+        )
+        monkeypatch.setattr(
+            install_mod.subprocess, "run",
+            lambda *a, **k: subprocess.CompletedProcess(
+                a[0], 0, stdout=str(onedrive / "profile.ps1") + "\n", stderr=""
+            ),
+        )
+        res = uninstall_powershell()
+        assert prof.read_text(encoding="utf-8") == ""
+        assert str(prof) in res.message
+
+    def test_nothing_installed_is_a_safe_noop(self, ps_home):
+        ps7 = _profile(ps_home, "PowerShell")
+        ps7.write_text("Set-Alias ll Get-ChildItem\n", encoding="utf-8")
+        res = uninstall_powershell()
+        assert res.success
+        assert "nothing to do" in res.message
+        assert ps7.read_text(encoding="utf-8") == "Set-Alias ll Get-ChildItem\n"
+
+
+class TestInstallPowerShell:
+    def test_replaces_legacy_copy_instead_of_duplicating(self, tmp_path, monkeypatch):
+        prof = tmp_path / "Microsoft.PowerShell_profile.ps1"
+        prof.write_text("Set-Alias ll Get-ChildItem\n\n" + _legacy_wrapper(), encoding="utf-8")
+        monkeypatch.setattr(install_mod.shutil, "which", lambda _name: "pwsh.exe")
+        monkeypatch.setattr(
+            install_mod.subprocess, "run",
+            lambda *a, **k: subprocess.CompletedProcess(
+                a[0], 0, stdout=str(prof) + "\n", stderr=""
+            ),
+        )
+        res = install_powershell()
+        assert res.success
+        text = prof.read_text(encoding="utf-8")
+        assert text.count("function global:root") == 1
+        assert MARKER_BEGIN in text
+        assert "Set-Alias ll Get-ChildItem" in text

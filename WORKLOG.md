@@ -332,3 +332,49 @@ config path, preview cap) and fixed what had drifted:
 
 Both earlier commits today were already pushed by Matthew when this
 pass started (main level with origin at a8d00db).
+
+## 2026-10-11 — Fixed: PowerShell uninstall missing the wrapper
+
+Investigated on Matthew's machine (read-only) before changing code. Both
+editions are installed: pwsh 7.6.6 (Store) and Windows PowerShell 5.1.
+Profiles found:
+
+- Documents/PowerShell/Microsoft.PowerShell_profile.ps1: marked block
+  only (install-shell, 2026-09-20).
+- Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1: the
+  wrapper TWICE. First an unmarked copy, byte-identical to the v0.1.0
+  root.ps1 (the old README's `root init-shell powershell >> $PROFILE`),
+  then a marked block install-shell added beneath it on 2026-05-15.
+
+So the June report had real causes, not just the benign "root.exe still
+opens the TUI" one:
+1. uninstall asked only `pwsh` for $PROFILE (pwsh wins the PATH lookup),
+   so the 5.1 profile was never opened;
+2. even if it had been, marker-based removal can't see the unmarked
+   copy, so 5.1 would still define `root`.
+
+Fix (install.py): uninstall now sweeps every per-user profile name
+(profile.ps1 + console/VS Code/ISE host files) in each edition's
+directory. The directories come from asking each installed edition for
+$PROFILE.CurrentUserAllHosts (handles OneDrive-redirected Documents),
+plus the standard ~/Documents/{PowerShell,WindowsPowerShell} and
+~/.config/powershell as a fallback, so it works with no PowerShell on
+PATH. It removes marked blocks and *exact* copies of the shipped
+wrapper; anything else that defines `root` is reported with its line
+number, never edited. Profiles are read and written in their own
+encoding (5.1's `>>` writes UTF-16). The message now also says root.exe
+keeps opening the picker until `pip uninstall`. Install strips an exact
+legacy copy before adding its block, so the duplicate can't recur.
+
+Field check: ran the new uninstall against copies of both real profiles
+in the scratchpad. Both came out empty (they held nothing but root);
+the real files were untouched (1368 / 2678 bytes before and after).
+Did NOT run it on the real profiles; Matthew still uses root.
+
+Tests 94 -> 103: 8 uninstall (both editions, legacy + marked together,
+user content preserved, edited copy left alone and reported, every host
+file, UTF-16 round trip, OneDrive dir via PowerShell query, no-op) and 1
+install (legacy replaced, not duplicated). All 9 fail on the old code.
+
+Left open (TODO): install only targets one edition, so a 5.1 user with
+pwsh also installed gets no wrapper in 5.1.

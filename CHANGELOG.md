@@ -71,3 +71,16 @@ Polish pass after first real use:
 - Docs: the Windows config directory is `%LOCALAPPDATA%\root\`, not
   `%APPDATA%`; README now covers `uninstall-shell`, `forget [PATH]`, and
   the edge-only behaviour of ←/→ while typing.
+- Fix: `uninstall-shell powershell` only looked at PowerShell 7's
+  `$PROFILE`, so a wrapper in Windows PowerShell 5.1's profile (or a
+  VS Code / ISE host profile) survived. It now sweeps every per-user
+  profile of both editions, asking each installed edition where they
+  live (so a OneDrive-redirected Documents folder is found), and also
+  removes exact hand-appended copies from `init-shell >> $PROFILE`. A
+  `root` function it didn't write is reported, never touched. Works
+  without PowerShell on PATH.
+- `install-shell powershell` replaces a hand-appended copy instead of
+  adding a second definition beneath it.
+- PowerShell profiles are read and written in their own encoding
+  (UTF-16 from Windows PowerShell 5.1's `>>`, UTF-8 with or without
+  BOM) instead of assuming UTF-8.

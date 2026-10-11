@@ -82,15 +82,17 @@ Phase 2 (launch memory, later session):
 
 ## Bugs / to investigate
 
-- [ ] `uninstall-shell powershell` may miss the wrapper. Matthew reported
-      it not taking effect (2026-06-15). Two suspects: (1) benign — the
-      function was removed but bare `root.exe` on PATH still launches the
-      TUI, so it *looks* un-removed; (2) real — `$PROFILE` is per-edition
-      / per-host, so install and uninstall can target different files
-      (pwsh ConsoleHost vs Windows PowerShell 5.1 `WindowsPowerShell\` vs
-      VS Code host). Fix: sweep all known PS profile paths on uninstall,
-      the way bash/zsh already sweep multiple rc files. cmd uninstall
-      confirmed working.
+- [x] `uninstall-shell powershell` may miss the wrapper. Matthew reported
+      it not taking effect (2026-06-15). Fixed 2026-10-11: suspect (2)
+      was real, plus a third cause. Uninstall now sweeps every profile
+      of both editions and removes hand-appended (unmarked) copies too;
+      the message also explains suspect (1). See worklog.
+- [ ] `install-shell powershell` installs into one edition only:
+      PowerShell 7 if `pwsh` is on PATH, else Windows PowerShell 5.1.
+      Someone who uses both gets no wrapper in 5.1, where `root` then
+      runs root.exe directly (the picker works but can't cd). Options:
+      install into both editions' profiles, or into the edition the
+      user is running (harder to detect reliably).
 
 ## Known limitations
 
@@ -108,11 +110,16 @@ Phase 2 (launch memory, later session):
 ## State at 2026-10-11
 
 - Preview delay shipped (333ms debounce + `preview_delay_ms` setting).
-  94/94 tests green. main is pushed and level with origin.
+- PowerShell uninstall bug fixed (both editions, every host, legacy
+  unmarked copies). 103/103 tests green.
 - **Matthew: try the delay by feel.** Holding up/down should keep the
   list smooth and the pane should catch up once you stop. If 333 feels
   off, change `preview_delay_ms` in
   `%LOCALAPPDATA%/root/config.toml`.
-- Likely next: the PowerShell uninstall bug above, Phase 2 (LAUNCH
-  fuzzy-search source), or the pip post-install hint (needs
+- **Matthew: your Windows PowerShell 5.1 profile defines `root`
+  twice** (a hand-appended copy from May, then the marked block).
+  Harmless, as the second definition wins. It goes away the next time
+  you run `root uninstall-shell powershell`.
+- Likely next: install into both PowerShell editions (above), Phase 2
+  (LAUNCH fuzzy-search source), or the pip post-install hint (needs
   investigation -- wheels lack post-install hooks).

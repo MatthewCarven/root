@@ -97,6 +97,103 @@ def install_fish() -> InstallResult:
 
 
 # ----- PowerShell -----
+#
+# Windows PowerShell 5.1 and PowerShell 7 keep *separate* profiles
+# (Documents\WindowsPowerShell\ vs Documents\PowerShell\), and each host
+# -- console, VS Code, ISE -- has its own file alongside a shared
+# profile.ps1. Install writes to one of them; uninstall sweeps them all,
+# because the wrapper may have been put in any of them (an older
+# install that found a different edition first, or a hand-run
+# `root init-shell powershell >> $PROFILE`).
+
+_PS_PROFILE_NAMES = (
+    "profile.ps1",
+    "Microsoft.PowerShell_profile.ps1",
+    "Microsoft.VSCode_profile.ps1",
+    "Microsoft.PowerShellISE_profile.ps1",
+)
+
+# Something still defining `root` after we've removed our own copies.
+_PS_ROOT_FUNCTION = re.compile(
+    r"^[ \t]*function[ \t]+(global:)?root\b", re.IGNORECASE | re.MULTILINE
+)
+
+
+def _powershell_profile_dirs() -> List[Path]:
+    """Every per-user profile directory, across both PowerShell editions.
+
+    Asks each installed edition where its profiles live (that respects
+    a OneDrive-redirected Documents folder), then adds the standard
+    locations in case an edition isn't on PATH.
+    """
+    dirs: List[Path] = []
+    for exe in ("pwsh", "powershell"):
+        ps_cmd = shutil.which(exe)
+        if ps_cmd is None:
+            continue
+        try:
+            res = subprocess.run(
+                [ps_cmd, "-NoProfile", "-Command",
+                 "Write-Output $PROFILE.CurrentUserAllHosts"],
+                capture_output=True, text=True, check=False,
+            )
+        except OSError:
+            continue
+        out = res.stdout.strip()
+        if res.returncode == 0 and out:
+            dirs.append(Path(out).parent)
+    home = Path.home()
+    dirs += [
+        home / "Documents" / "PowerShell",
+        home / "Documents" / "WindowsPowerShell",
+        home / ".config" / "powershell",  # pwsh on Linux / macOS
+    ]
+    seen = set()
+    unique: List[Path] = []
+    for d in dirs:
+        key = os.path.normcase(str(d))
+        if key not in seen:
+            seen.add(key)
+            unique.append(d)
+    return unique
+
+
+def _read_profile(path: Path) -> "tuple[str, str]":
+    """Read a profile, returning ``(text, encoding)``.
+
+    Windows PowerShell 5.1 writes UTF-16 by default (``>>``, Out-File)
+    and editors may add a UTF-8 BOM, so sniff the BOM rather than
+    assume UTF-8. Writing back with the same encoding keeps the file
+    from being re-encoded under the user.
+    """
+    raw = path.read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        enc = "utf-16"
+    elif raw.startswith(b"\xef\xbb\xbf"):
+        enc = "utf-8-sig"
+    else:
+        enc = "utf-8"
+    return raw.decode(enc).replace("\r\n", "\n"), enc
+
+
+def _remove_legacy_ps_wrapper(content: str) -> "tuple[str, bool]":
+    """Remove unmarked copies of the wrapper, as appended by hand with
+    ``root init-shell powershell >> $PROFILE`` before install-shell
+    existed.
+
+    Only exact copies of the shipped text are touched, so anything the
+    user edited is left alone. NB: if root.ps1 ever changes, keep the
+    old text matchable here -- those copies are still out there.
+    """
+    legacy = _wrapper_text("root.ps1").replace("\r\n", "\n").strip()
+    if legacy not in content:
+        return content, False
+    new = content.replace(legacy, "")
+    new = re.sub(r"\n{3,}", "\n\n", new).lstrip("\n")
+    if new.strip() == "":
+        new = ""
+    return new, True
+
 
 def install_powershell() -> InstallResult:
     ps_cmd = shutil.which("pwsh") or shutil.which("powershell")
@@ -116,9 +213,12 @@ def install_powershell() -> InstallResult:
         )
     profile = Path(res.stdout.strip())
     profile.parent.mkdir(parents=True, exist_ok=True)
-    existing = profile.read_text(encoding="utf-8") if profile.exists() else ""
+    existing, enc = _read_profile(profile) if profile.exists() else ("", "utf-8")
+    # A hand-appended legacy copy would otherwise sit above our marked
+    # block and define `root` twice.
+    existing, _ = _remove_legacy_ps_wrapper(existing)
     snippet = _wrapper_text("root.ps1")
-    profile.write_text(_idempotent_replace(existing, snippet), encoding="utf-8")
+    profile.write_text(_idempotent_replace(existing, snippet), encoding=enc)
     msg = (
         f"Wrapper installed into {profile}.\n"
         "Load it in this session:  . $PROFILE\n"
@@ -370,41 +470,59 @@ def uninstall_fish() -> InstallResult:
 
 
 def uninstall_powershell() -> InstallResult:
-    ps_cmd = shutil.which("pwsh") or shutil.which("powershell")
-    if ps_cmd is None:
-        return InstallResult(
-            False, None,
-            "PowerShell isn't on PATH. Cannot locate $PROFILE.",
-        )
-    res = subprocess.run(
-        [ps_cmd, "-NoProfile", "-Command", "Write-Output $PROFILE"],
-        capture_output=True, text=True, check=False,
-    )
-    if res.returncode != 0 or not res.stdout.strip():
-        return InstallResult(
-            False, None,
-            f"Could not determine $PROFILE: {res.stderr.strip() or 'no output'}",
-        )
-    profile = Path(res.stdout.strip())
-    if not profile.exists():
-        return InstallResult(
-            True, None,
-            f"{profile} not present -- nothing to do.",
-        )
-    content = profile.read_text(encoding="utf-8")
-    new, found = _remove_marker_block(content)
-    if not found:
-        return InstallResult(
-            True, None,
-            f"No root wrapper found in {profile} -- nothing to do.",
-        )
-    profile.write_text(new, encoding="utf-8")
-    return InstallResult(
-        True, profile,
-        f"Removed wrapper from {profile}.\n"
-        "Open a new PowerShell window (or run `Remove-Item Function:root`) "
-        "to finish.",
-    )
+    """Remove the wrapper from every profile of every PowerShell edition.
+
+    Removes marked blocks and exact legacy (unmarked) copies; anything
+    else that still defines `root` is reported, never touched.
+    """
+    dirs = _powershell_profile_dirs()
+    removed: List[Path] = []
+    notes: List[str] = []
+    for d in dirs:
+        for name in _PS_PROFILE_NAMES:
+            path = d / name
+            if not path.is_file():
+                continue
+            try:
+                content, enc = _read_profile(path)
+            except (OSError, UnicodeDecodeError) as e:
+                notes.append(f"Could not read {path} ({e}) -- check it by hand.")
+                continue
+            new, found = _remove_marker_block(content)
+            new, found_legacy = _remove_legacy_ps_wrapper(new)
+            if found or found_legacy:
+                try:
+                    path.write_text(new, encoding=enc)
+                except OSError as e:
+                    notes.append(f"Could not write {path} ({e}) -- edit it by hand.")
+                    continue
+                removed.append(path)
+            m = _PS_ROOT_FUNCTION.search(new)
+            if m:
+                line = new.count("\n", 0, m.start()) + 1
+                notes.append(
+                    f"{path} line {line} still defines a `root` function that "
+                    "root didn't install (an edited copy?) -- left alone; "
+                    "remove it by hand if you want it gone."
+                )
+
+    if not removed:
+        checked = "\n".join(f"  {d}" for d in dirs)
+        lines = ["No root wrapper found in any PowerShell profile -- nothing to do.",
+                 "Checked:", checked]
+        return InstallResult(True, None, "\n".join(lines + notes))
+
+    lines = ["Removed the root wrapper from:"]
+    lines += [f"  {p}" for p in removed]
+    lines += notes
+    lines += [
+        "",
+        "Open a new PowerShell window (or run `Remove-Item Function:root`",
+        "in this one) to finish. Until you `pip uninstall root-cli`, typing",
+        "`root` still opens the picker via root.exe -- it just can't change",
+        "directory any more.",
+    ]
+    return InstallResult(True, removed[0], "\n".join(lines))
 
 
 def _unmerge_autorun(existing: Optional[str]) -> "tuple[str, bool]":
