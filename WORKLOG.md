@@ -413,3 +413,39 @@ Tests 103 -> 111 (8 new; the 3 both-edition ones fail on the old code,
 the other 5 guard single-edition, failure paths, round trip, ASCII).
 Not run on Matthew's real profiles; flagged the one-command tidy-up in
 TODO for him instead.
+
+## 2026-10-11 — Test suite was overwriting the real history.json
+
+Found while sizing up "what's next": Matthew's real history.json held
+two entries, one of them a pytest temp dir from my own
+test_tab_during_delay_previews_immediately (21:53, my last test run);
+the other his 22:32 cd into this repo.
+
+Cause: pressing Enter on a directory calls commit_path(), which saves
+history to the *live* config dir. test_app's pilot tests build RootApp
+with a fresh, empty History() and only the file-launch test set
+ROOT_CONFIG_DIR. So every committing test replaced the real history
+with one fake path. Two such tests: test_enter_on_preview_dir_commits
+(since 2026-09-20) and mine from today. Every suite run since
+2026-09-20 has wiped his frecency history, including the ~10 runs I
+did today. Bookmarks (last written 2026-08-05) and config.toml were
+never touched: no test saves them outside an isolated dir. Nothing
+else in the suite reaches the real system (registry code is never
+called; install tests all fake the home dir or the $PROFILE answer).
+
+Possibly relevant to the 2026-09-20 "history not recording" report
+(written up as display dedupe): suite runs that day would also have
+reset his history. Can't tell now which explanation he was seeing;
+the dedupe analysis still stands on its own.
+
+Fix: tests/conftest.py, an autouse fixture giving every test its own
+ROOT_CONFIG_DIR (tmp_path_factory, so it never shows up inside a
+test's directory tree). Guard test in test_config.py asserts the live
+config dir is never the real one; it fails with conftest.py removed.
+Proof on the real machine: sha256 of history.json and bookmarks.toml
+identical before and after a full 112-test run.
+
+Cleanup: `root forget` on the pytest path, so his recents list only
+real visits. The lost history can't be rebuilt from anything here;
+frecency refills with use. Flagged Previous Versions in TODO as a
+long shot.

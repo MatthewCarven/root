@@ -1,6 +1,8 @@
 """Tests for config + bookmarks round-tripping."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from root_cli.config import Bookmarks, Config
@@ -76,3 +78,13 @@ def test_preview_delay_missing_or_negative(isolated_config):
     assert Config.load().preview_delay_ms == 333
     path.write_text("preview_delay_ms = -50\n", encoding="utf-8")
     assert Config.load().preview_delay_ms == 0
+
+
+def test_suite_never_uses_the_real_config_dir():
+    # Guards the autouse fixture in conftest.py: the TUI tests commit
+    # directories, and a commit saves history.json to the live config dir.
+    from platformdirs import user_config_dir
+
+    from root_cli.paths import config_dir
+
+    assert config_dir() != Path(user_config_dir("root", appauthor=False))

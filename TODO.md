@@ -115,11 +115,15 @@ Phase 2 (launch memory, later session):
   list smooth and the pane should catch up once you stop. If 333 feels
   off, change `preview_delay_ms` in
   `%LOCALAPPDATA%/root/config.toml`.
-- **Matthew: optional tidy-up** -- run `root install-shell powershell`
-  once. Your Windows PowerShell 5.1 profile defines `root` twice (a
-  hand-appended copy from May, then the marked block); a re-install
-  leaves exactly one in each edition. Harmless until then, as the
-  second definition wins. (Checked on copies of your real profiles.)
+- Matthew re-ran `install-shell powershell`: both profiles now define
+  `root` once.
+- **The test suite was overwriting Matthew's real history.json**
+  (2026-09-20 to 2026-10-11). Fixed with an autouse fixture in
+  tests/conftest.py; his frecency history is lost and will rebuild
+  with use. 112/112 tests green. See worklog.
+- **Matthew: optional, low odds** -- if File History or System
+  Restore is on, `%LOCALAPPDATA%/root/history.json` -> Properties ->
+  Previous Versions may hold a pre-wipe copy.
 - Likely next: Phase 2 (LAUNCH fuzzy-search source), or the pip
   post-install hint (needs investigation -- wheels lack post-install
   hooks).
