@@ -378,3 +378,38 @@ install (legacy replaced, not duplicated). All 9 fail on the old code.
 
 Left open (TODO): install only targets one edition, so a 5.1 user with
 pwsh also installed gets no wrapper in 5.1.
+
+## 2026-10-11 — install-shell powershell covers both editions
+
+Follow-on to the uninstall fix, at Matthew's request. Install used to
+take `which("pwsh") or which("powershell")` and write that one $PROFILE,
+so with both editions present (the Windows norm once pwsh is added)
+5.1 got nothing and `root` there ran root.exe bare: picker yes, cd no.
+
+Now `_ps_profile_paths(which)` asks every edition on PATH for
+$PROFILE.<which> and returns (paths, errors); install writes the
+CurrentUserCurrentHost (console) profile of each, uninstall's directory
+sweep reuses the same helper with CurrentUserAllHosts. Kept the console
+profile rather than switching to profile.ps1 (all hosts): existing
+installs live in the console file, and moving would need a migration.
+One edition failing its query no longer sinks the install; the message
+lists what was skipped. Message now says the two editions keep separate
+execution policies.
+
+Checked:
+- Matthew's machine (read-only): pwsh CurrentUser policy Undefined
+  (pwsh's Windows default is RemoteSigned), 5.1 CurrentUser
+  RemoteSigned (set back in May), so both editions load profiles.
+- Install against copies of his real profiles via the real $PROFILE
+  queries: pwsh profile byte-identical after (1368 -> 1368); 5.1
+  profile 2678 -> 1368, duplicate gone, one definition. Real files
+  untouched.
+- Windows PowerShell 5.1.22621 dot-sourcing a profile written by
+  install (UTF-8, no BOM): `root` loads as a Function and the user's
+  own lines still work. Added a test pinning root.ps1 to ASCII, since
+  5.1 reads BOM-less files in the ANSI code page.
+
+Tests 103 -> 111 (8 new; the 3 both-edition ones fail on the old code,
+the other 5 guard single-edition, failure paths, round trip, ASCII).
+Not run on Matthew's real profiles; flagged the one-command tidy-up in
+TODO for him instead.

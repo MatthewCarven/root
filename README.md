@@ -42,7 +42,8 @@ also be explicit:
 root install-shell bash         # appends to ~/.bashrc
 root install-shell zsh          # appends to ~/.zshrc
 root install-shell fish         # writes ~/.config/fish/functions/root.fish
-root install-shell powershell   # appends to $PROFILE (creates it if missing)
+root install-shell powershell   # appends to $PROFILE of every installed PowerShell
+                                # (5.1 and 7 each have their own; creates if missing)
 root install-shell cmd          # drops root.cmd in %USERPROFILE%\.root\bin
                                 # and prepends that dir to your user PATH
 ```
@@ -72,7 +73,9 @@ root init-shell powershell | Out-String | Invoke-Expression  # PowerShell
 ### PowerShell execution policy
 
 If `. $PROFILE` errors with "running scripts is disabled on this system,"
-you need to allow signed local scripts once per user:
+you need to allow signed local scripts once per user. Windows PowerShell
+5.1 and PowerShell 7 keep separate policies, so run it in whichever one
+complained (5.1 defaults to Restricted; 7 already allows it):
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned

@@ -460,3 +460,102 @@ class TestInstallPowerShell:
         assert text.count("function global:root") == 1
         assert MARKER_BEGIN in text
         assert "Set-Alias ll Get-ChildItem" in text
+
+
+# ---------------------------------------------------------------------------
+# PowerShell install: every installed edition gets the wrapper
+# ---------------------------------------------------------------------------
+
+
+def _fake_editions(monkeypatch, profiles):
+    """Fake which editions are on PATH and what each says $PROFILE is.
+
+    ``profiles`` maps exe name -> profile path, or None for an edition
+    that is on PATH but fails the $PROFILE query.
+    """
+    monkeypatch.setattr(
+        install_mod.shutil, "which",
+        lambda name: f"{name}.exe" if name in profiles else None,
+    )
+
+    def run(args, **_kw):
+        path = profiles[args[0][: -len(".exe")]]
+        if path is None:
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="boom")
+        return subprocess.CompletedProcess(args, 0, stdout=f"{path}\n", stderr="")
+
+    monkeypatch.setattr(install_mod.subprocess, "run", run)
+
+
+def _both_editions(home: Path):
+    docs = home / "Documents"
+    return (
+        docs / "PowerShell" / "Microsoft.PowerShell_profile.ps1",
+        docs / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1",
+    )
+
+
+class TestInstallPowerShellEditions:
+    def test_installs_into_both_editions(self, tmp_path, monkeypatch):
+        ps7, ps51 = _both_editions(tmp_path)  # neither dir exists yet
+        _fake_editions(monkeypatch, {"pwsh": ps7, "powershell": ps51})
+        res = install_powershell()
+        assert res.success
+        for p in (ps7, ps51):
+            assert p.read_text(encoding="utf-8").count(MARKER_BEGIN) == 1
+            assert str(p) in res.message
+
+    def test_reinstall_does_not_duplicate_in_either(self, tmp_path, monkeypatch):
+        ps7, ps51 = _both_editions(tmp_path)
+        _fake_editions(monkeypatch, {"pwsh": ps7, "powershell": ps51})
+        install_powershell()
+        install_powershell()
+        for p in (ps7, ps51):
+            assert p.read_text(encoding="utf-8").count("function global:root") == 1
+
+    def test_pwsh_only_installs_there(self, tmp_path, monkeypatch):
+        # Linux / macOS: there is no Windows PowerShell.
+        prof = tmp_path / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
+        _fake_editions(monkeypatch, {"pwsh": prof})
+        res = install_powershell()
+        assert res.success
+        assert MARKER_BEGIN in prof.read_text(encoding="utf-8")
+
+    def test_one_edition_failing_still_installs_the_other(self, tmp_path, monkeypatch):
+        ps7, _ = _both_editions(tmp_path)
+        _fake_editions(monkeypatch, {"pwsh": ps7, "powershell": None})
+        res = install_powershell()
+        assert res.success
+        assert MARKER_BEGIN in ps7.read_text(encoding="utf-8")
+        assert "Skipped powershell" in res.message
+
+    def test_every_edition_failing_is_a_failure(self, tmp_path, monkeypatch):
+        _fake_editions(monkeypatch, {"pwsh": None, "powershell": None})
+        res = install_powershell()
+        assert not res.success
+        assert "Could not determine $PROFILE" in res.message
+
+    def test_no_powershell_is_a_failure(self, monkeypatch):
+        _fake_editions(monkeypatch, {})
+        res = install_powershell()
+        assert not res.success
+        assert "isn't on PATH" in res.message
+
+    def test_roundtrip_with_uninstall(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        ps7, ps51 = _both_editions(tmp_path)
+        ps51.parent.mkdir(parents=True)
+        ps51.write_text("Set-Alias ll Get-ChildItem\n", encoding="utf-8")
+        _fake_editions(monkeypatch, {"pwsh": ps7, "powershell": ps51})
+        install_powershell()
+        uninstall_powershell()
+        assert ps7.read_text(encoding="utf-8") == ""
+        text = ps51.read_text(encoding="utf-8")
+        assert "Set-Alias ll Get-ChildItem" in text
+        assert "function global:root" not in text
+
+    def test_wrapper_is_ascii(self):
+        # Install writes profiles without a BOM, and Windows PowerShell
+        # 5.1 reads BOM-less files in the ANSI code page: any non-ASCII
+        # character in the wrapper would load as mojibake there.
+        assert _wrapper_text("root.ps1").isascii()

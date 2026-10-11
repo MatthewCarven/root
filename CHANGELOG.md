@@ -81,6 +81,11 @@ Polish pass after first real use:
   without PowerShell on PATH.
 - `install-shell powershell` replaces a hand-appended copy instead of
   adding a second definition beneath it.
+- `install-shell powershell` installs into every installed edition's
+  `$PROFILE` (Windows PowerShell 5.1 and PowerShell 7), not just the
+  first one found on PATH, so `root` can change directory in both. If
+  one edition can't be queried, the other is still installed and the
+  message says which was skipped.
 - PowerShell profiles are read and written in their own encoding
   (UTF-16 from Windows PowerShell 5.1's `>>`, UTF-8 with or without
   BOM) instead of assuming UTF-8.

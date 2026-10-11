@@ -87,12 +87,10 @@ Phase 2 (launch memory, later session):
       was real, plus a third cause. Uninstall now sweeps every profile
       of both editions and removes hand-appended (unmarked) copies too;
       the message also explains suspect (1). See worklog.
-- [ ] `install-shell powershell` installs into one edition only:
-      PowerShell 7 if `pwsh` is on PATH, else Windows PowerShell 5.1.
-      Someone who uses both gets no wrapper in 5.1, where `root` then
-      runs root.exe directly (the picker works but can't cd). Options:
-      install into both editions' profiles, or into the edition the
-      user is running (harder to detect reliably).
+- [x] `install-shell powershell` installed into one edition only
+      (PowerShell 7 if `pwsh` was on PATH, else 5.1), so someone using
+      both got no wrapper in 5.1. Fixed 2026-10-11: installs into the
+      console profile of every installed edition.
 
 ## Known limitations
 
@@ -111,15 +109,17 @@ Phase 2 (launch memory, later session):
 
 - Preview delay shipped (333ms debounce + `preview_delay_ms` setting).
 - PowerShell uninstall bug fixed (both editions, every host, legacy
-  unmarked copies). 103/103 tests green.
+  unmarked copies), and install now covers both editions too.
+  111/111 tests green.
 - **Matthew: try the delay by feel.** Holding up/down should keep the
   list smooth and the pane should catch up once you stop. If 333 feels
   off, change `preview_delay_ms` in
   `%LOCALAPPDATA%/root/config.toml`.
-- **Matthew: your Windows PowerShell 5.1 profile defines `root`
-  twice** (a hand-appended copy from May, then the marked block).
-  Harmless, as the second definition wins. It goes away the next time
-  you run `root uninstall-shell powershell`.
-- Likely next: install into both PowerShell editions (above), Phase 2
-  (LAUNCH fuzzy-search source), or the pip post-install hint (needs
-  investigation -- wheels lack post-install hooks).
+- **Matthew: optional tidy-up** -- run `root install-shell powershell`
+  once. Your Windows PowerShell 5.1 profile defines `root` twice (a
+  hand-appended copy from May, then the marked block); a re-install
+  leaves exactly one in each edition. Harmless until then, as the
+  second definition wins. (Checked on copies of your real profiles.)
+- Likely next: Phase 2 (LAUNCH fuzzy-search source), or the pip
+  post-install hint (needs investigation -- wheels lack post-install
+  hooks).

@@ -101,10 +101,15 @@ def install_fish() -> InstallResult:
 # Windows PowerShell 5.1 and PowerShell 7 keep *separate* profiles
 # (Documents\WindowsPowerShell\ vs Documents\PowerShell\), and each host
 # -- console, VS Code, ISE -- has its own file alongside a shared
-# profile.ps1. Install writes to one of them; uninstall sweeps them all,
-# because the wrapper may have been put in any of them (an older
-# install that found a different edition first, or a hand-run
-# `root init-shell powershell >> $PROFILE`).
+# profile.ps1. Install writes to the console profile of every installed
+# edition; uninstall sweeps every profile, because the wrapper may have
+# been put in any of them (an older install that only covered one
+# edition, or a hand-run `root init-shell powershell >> $PROFILE`).
+#
+# root.ps1 must stay pure ASCII: Windows PowerShell 5.1 reads a profile
+# without a BOM in the ANSI code page, and we write it BOM-less.
+
+_PS_EDITIONS = ("pwsh", "powershell")  # PowerShell 7, Windows PowerShell 5.1
 
 _PS_PROFILE_NAMES = (
     "profile.ps1",
@@ -119,43 +124,58 @@ _PS_ROOT_FUNCTION = re.compile(
 )
 
 
-def _powershell_profile_dirs() -> List[Path]:
-    """Every per-user profile directory, across both PowerShell editions.
+def _unique_paths(paths: List[Path]) -> List[Path]:
+    seen = set()
+    unique: List[Path] = []
+    for p in paths:
+        key = os.path.normcase(str(p))
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return unique
 
-    Asks each installed edition where its profiles live (that respects
-    a OneDrive-redirected Documents folder), then adds the standard
-    locations in case an edition isn't on PATH.
+
+def _ps_profile_paths(which: str) -> "tuple[List[Path], List[str]]":
+    """Ask each installed edition for ``$PROFILE.<which>``.
+
+    Asking (rather than assuming ~/Documents) respects a OneDrive-
+    redirected Documents folder. Returns ``(paths, errors)``: one path
+    per edition that answered, one error per edition that didn't.
+    Editions not on PATH are simply absent from both.
     """
-    dirs: List[Path] = []
-    for exe in ("pwsh", "powershell"):
+    paths: List[Path] = []
+    errors: List[str] = []
+    for exe in _PS_EDITIONS:
         ps_cmd = shutil.which(exe)
         if ps_cmd is None:
             continue
         try:
             res = subprocess.run(
-                [ps_cmd, "-NoProfile", "-Command",
-                 "Write-Output $PROFILE.CurrentUserAllHosts"],
+                [ps_cmd, "-NoProfile", "-Command", f"Write-Output $PROFILE.{which}"],
                 capture_output=True, text=True, check=False,
             )
-        except OSError:
+        except OSError as e:
+            errors.append(f"{exe}: {e}")
             continue
         out = res.stdout.strip()
         if res.returncode == 0 and out:
-            dirs.append(Path(out).parent)
+            paths.append(Path(out))
+        else:
+            errors.append(f"{exe}: {res.stderr.strip() or 'no output'}")
+    return _unique_paths(paths), errors
+
+
+def _powershell_profile_dirs() -> List[Path]:
+    """Every per-user profile directory, across both PowerShell editions:
+    wherever the installed editions say, plus the standard locations in
+    case an edition isn't on PATH."""
+    reported, _errors = _ps_profile_paths("CurrentUserAllHosts")
     home = Path.home()
-    dirs += [
+    return _unique_paths([p.parent for p in reported] + [
         home / "Documents" / "PowerShell",
         home / "Documents" / "WindowsPowerShell",
         home / ".config" / "powershell",  # pwsh on Linux / macOS
-    ]
-    seen = set()
-    unique: List[Path] = []
-    for d in dirs:
-        key = os.path.normcase(str(d))
-        if key not in seen:
-            seen.add(key)
-            unique.append(d)
-    return unique
+    ])
 
 
 def _read_profile(path: Path) -> "tuple[str, str]":
@@ -196,38 +216,55 @@ def _remove_legacy_ps_wrapper(content: str) -> "tuple[str, bool]":
 
 
 def install_powershell() -> InstallResult:
-    ps_cmd = shutil.which("pwsh") or shutil.which("powershell")
-    if ps_cmd is None:
+    """Install into the console profile ($PROFILE) of every installed
+    edition.
+
+    With both editions installed (the Windows norm once pwsh is added),
+    covering only one leaves `root` in the other running root.exe bare:
+    the picker opens but can't change directory.
+    """
+    profiles, errors = _ps_profile_paths("CurrentUserCurrentHost")
+    if not profiles:
+        if errors:
+            return InstallResult(
+                False, None,
+                "Could not determine $PROFILE: " + "; ".join(errors),
+            )
         return InstallResult(
             False, None,
             "PowerShell isn't on PATH. Install PowerShell, then try again.",
         )
-    res = subprocess.run(
-        [ps_cmd, "-NoProfile", "-Command", "Write-Output $PROFILE"],
-        capture_output=True, text=True, check=False,
-    )
-    if res.returncode != 0 or not res.stdout.strip():
-        return InstallResult(
-            False, None,
-            f"Could not determine $PROFILE: {res.stderr.strip() or 'no output'}",
-        )
-    profile = Path(res.stdout.strip())
-    profile.parent.mkdir(parents=True, exist_ok=True)
-    existing, enc = _read_profile(profile) if profile.exists() else ("", "utf-8")
-    # A hand-appended legacy copy would otherwise sit above our marked
-    # block and define `root` twice.
-    existing, _ = _remove_legacy_ps_wrapper(existing)
     snippet = _wrapper_text("root.ps1")
-    profile.write_text(_idempotent_replace(existing, snippet), encoding=enc)
-    msg = (
-        f"Wrapper installed into {profile}.\n"
-        "Load it in this session:  . $PROFILE\n"
-        "Then verify:  Get-Command root | Format-List Name, CommandType\n"
-        "(should show CommandType : Function)\n\n"
-        "If `. $PROFILE` errors with execution-policy, run once:\n"
-        "  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned"
-    )
-    return InstallResult(True, profile, msg)
+    installed: List[Path] = []
+    notes = [f"Skipped {e}" for e in errors]
+    for profile in profiles:
+        try:
+            profile.parent.mkdir(parents=True, exist_ok=True)
+            existing, enc = _read_profile(profile) if profile.exists() else ("", "utf-8")
+            # A hand-appended legacy copy would otherwise sit above our
+            # marked block and define `root` twice.
+            existing, _ = _remove_legacy_ps_wrapper(existing)
+            profile.write_text(_idempotent_replace(existing, snippet), encoding=enc)
+        except (OSError, UnicodeDecodeError) as e:
+            notes.append(f"Could not update {profile} ({e}).")
+            continue
+        installed.append(profile)
+    if not installed:
+        return InstallResult(False, None, "\n".join(notes))
+    lines = ["Wrapper installed into:"]
+    lines += [f"  {p}" for p in installed]
+    lines += notes
+    lines += [
+        "",
+        "Load it in this session:  . $PROFILE",
+        "Then verify:  Get-Command root | Format-List Name, CommandType",
+        "(should show CommandType : Function)",
+        "",
+        "If `. $PROFILE` errors with execution-policy, run once in that",
+        "PowerShell (5.1 and 7 keep separate policies):",
+        "  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned",
+    ]
+    return InstallResult(True, installed[0], "\n".join(lines))
 
 
 # ----- cmd.exe -----
