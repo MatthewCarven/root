@@ -4,6 +4,9 @@ UX:
 - Top: an Input where you type to filter.
 - Middle-left: a ListView of ranked candidates from all sources.
 - Middle-right: a preview pane listing the highlighted dir's contents.
+  Cursor moves update it once the cursor rests (PREVIEW_DELAY, 333ms),
+  so holding up/down stays smooth; typing and navigating update it at
+  once, and Tab never makes you wait.
 - Bottom: a footer of keybindings.
 
 Keys:
@@ -55,6 +58,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from root_cli.candidates import (
@@ -179,6 +183,11 @@ class RootApp(App):
         Binding("down", "cursor_down", show=False),
     ]
 
+    # Seconds the results cursor must rest before the preview pane
+    # rebuilds. Holding up/down would otherwise list every dir on the
+    # way past, which makes the main list stutter.
+    PREVIEW_DELAY = 0.333
+
     query: reactive[str] = reactive("")
     browse_dir: reactive[Path] = reactive(Path.cwd())
     _bookmark_mode: bool = False
@@ -203,6 +212,8 @@ class RootApp(App):
         self.committed_path: Optional[Path] = None
         self._candidates: List[Candidate] = []
         self._preview_entries: List[PreviewEntry] = []
+        self._previewed: Optional[Path] = None  # candidate path the pane shows
+        self._preview_timer: Optional[Timer] = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -249,11 +260,15 @@ class RootApp(App):
         Synthetic rows preview their concrete .path (the browse dir for
         '.', its parent for '..'), which is what the user expects: "what
         will I find if I go here?"
+
+        Runs immediately; any pending debounced update is superseded.
         """
+        self._cancel_preview_timer()
         title = self.query_one("#preview-title", Static)
         pane = self.query_one("#preview", ListView)
         cand = self._current()
         path = cand.path if cand is not None else None
+        self._previewed = path
         try:
             if path is not None and not path.is_dir():
                 path = None
@@ -271,11 +286,29 @@ class RootApp(App):
             pane.append(_PreviewRow(entry))
         pane.index = 0
 
+    def _cancel_preview_timer(self) -> None:
+        if self._preview_timer is not None:
+            self._preview_timer.stop()
+            self._preview_timer = None
+
+    def _preview_settled(self) -> None:
+        """Debounce timer fired: the cursor has rested, so preview now --
+        unless it came back to the row the pane already shows."""
+        self._preview_timer = None
+        cand = self._current()
+        if (cand.path if cand is not None else None) != self._previewed:
+            self._update_preview()
+
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         # Only the main results list drives the preview; highlight
-        # changes *inside* the preview must not rebuild it.
+        # changes *inside* the preview must not rebuild it. Each move
+        # restarts the delay, so a held arrow key previews once, at the
+        # row it stops on.
         if event.list_view.id == "results" and not self._bookmark_mode:
-            self._update_preview()
+            self._cancel_preview_timer()
+            self._preview_timer = self.set_timer(
+                self.PREVIEW_DELAY, self._preview_settled
+            )
 
     def _default_cursor_index(self) -> Optional[int]:
         """Pick a sensible starting selection.
@@ -349,6 +382,10 @@ class RootApp(App):
         if self._preview_focused():
             self.query_one(Input).focus()
             return
+        # Tab straight after a cursor move: don't make the user wait out
+        # the delay, or step into the previous row's stale listing.
+        if self._preview_timer is not None:
+            self._update_preview()
         if self._preview_entries:
             self.query_one("#preview", ListView).focus()
 

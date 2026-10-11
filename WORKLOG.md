@@ -275,3 +275,24 @@ Repro-script blooper: the flow sweep called the real launcher once and
 popped Notepad on Matthew's desktop (he closed it). Mock launch_path
 in any future scratch repros. On the plus side: real-machine proof
 that os.startfile launching works.
+
+## 2026-10-11 — Preview pane delay (333ms debounce on cursor moves)
+
+Matthew asked for the preview pane to wait 333ms before updating, so
+holding up/down keeps the main list responsive. Done as a true
+debounce: every results-list highlight restarts a Textual timer
+(`RootApp.PREVIEW_DELAY = 0.333`); the pane rebuilds once, at the row
+the cursor stops on, and skips the rebuild if it came back to the row
+already shown (also kills the redundant second build every _refresh
+used to do via the Highlighted event).
+
+Deliberately NOT delayed: typing, descend/ascend, Ctrl+D — _refresh
+still previews immediately (any direct _update_preview cancels the
+pending timer). Tab with an update pending flushes it first, so you
+never Tab into the previous row's listing. Known edge: a mouse click
+into the pane within the 333ms window sees the old listing until the
+timer fires; not worth handling.
+
+Tests 88 -> 91: delay holds then fires; Tab mid-delay flushes and
+Enter commits the right dir; navigation stays instant. Verified the
+delay test fails against the old app.py.

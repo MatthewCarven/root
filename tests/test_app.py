@@ -218,3 +218,67 @@ def test_enter_on_preview_marker_row_is_noop(tmp_path):
             assert app.browse_dir == start
 
     _run(scenario())
+
+
+# ---------------------------------------------------------------------------
+# Preview delay: cursor moves wait for the cursor to rest before rebuilding
+# ---------------------------------------------------------------------------
+
+
+def _make_two_dir_tree(tmp_path: Path) -> Path:
+    """start/{alpha/a_inner/, beta/b_inner/} — default cursor on alpha."""
+    start = tmp_path / "start"
+    (start / "alpha" / "a_inner").mkdir(parents=True)
+    (start / "beta" / "b_inner").mkdir(parents=True)
+    return start
+
+
+def _previewing(app: RootApp) -> list[str]:
+    return [e.path.name for e in app._preview_entries if not e.is_marker]
+
+
+def test_preview_waits_for_cursor_to_rest(tmp_path):
+    start = _make_two_dir_tree(tmp_path)
+
+    async def scenario():
+        app = _make_app(start)
+        app.PREVIEW_DELAY = 0.5
+        async with app.run_test() as pilot:
+            assert _previewing(app) == ["a_inner"]
+            await pilot.press("down")  # alpha -> beta
+            assert _previewing(app) == ["a_inner"]  # still the old listing
+            await pilot.pause(1.0)
+            assert _previewing(app) == ["b_inner"]
+
+    _run(scenario())
+
+
+def test_tab_during_delay_previews_immediately(tmp_path):
+    start = _make_two_dir_tree(tmp_path)
+
+    async def scenario():
+        app = _make_app(start)
+        app.PREVIEW_DELAY = 30  # never fires within the test
+        async with app.run_test() as pilot:
+            await pilot.press("down", "tab")
+            assert app.focused is not None and app.focused.id == "preview"
+            assert _previewing(app) == ["b_inner"]
+            await pilot.press("enter")
+        assert app.committed_path == (start / "beta" / "b_inner").resolve()
+
+    _run(scenario())
+
+
+def test_navigating_previews_without_delay(tmp_path):
+    start = _make_two_dir_tree(tmp_path)
+
+    async def scenario():
+        app = _make_app(start)
+        app.PREVIEW_DELAY = 30
+        async with app.run_test() as pilot:
+            await pilot.press("down", "right")  # descend into beta
+            assert app.browse_dir == (start / "beta").resolve()
+            # Cursor lands on '.', which previews beta itself — at once.
+            assert _previewing(app) == ["b_inner"]
+
+    _run(scenario())

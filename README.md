@@ -128,7 +128,9 @@ The default cursor position is smart:
 ### The preview pane
 
 The right-hand pane always shows the first-level contents of whatever
-directory is highlighted. It's interactive:
+directory is highlighted. While you move the cursor it waits until
+the cursor rests for a third of a second before listing, so holding
+↑/↓ stays smooth (Tab skips the wait). It's interactive:
 
 - **Tab** moves focus into the pane (Tab again, **Shift+Tab**, or **←**
   goes back to the search box).
