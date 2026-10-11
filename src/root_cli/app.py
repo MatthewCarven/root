@@ -195,8 +195,12 @@ class RootApp(App):
         bookmarks: Bookmarks,
         history: History,
         start_dir: Path,
+        notice: Optional[str] = None,
     ):
         super().__init__()
+        # Shown above the key hints all session (e.g. "your shell
+        # wrapper isn't loaded"), since it applies to every pick.
+        self._notice = notice
         self.config = config
         self.bookmarks = bookmarks
         self.history = history
@@ -242,7 +246,9 @@ class RootApp(App):
         lv.index = self._default_cursor_index()
 
         status = self.query_one("#status", Static)
+        notice = f"[yellow]{escape(self._notice)}[/yellow]\n" if self._notice else ""
         status.update(
+            notice +
             f"[dim]browsing[/dim] [b]{self.browse_dir}[/b]   "
             f"[dim]{len(self._candidates)} result(s)[/dim]\n"
             f"[dim]Enter[/dim] go    "
@@ -608,7 +614,9 @@ class RootApp(App):
         self._refresh()
 
 
-def run_app(start_dir: Optional[Path] = None) -> Optional[Path]:
+def run_app(
+    start_dir: Optional[Path] = None, notice: Optional[str] = None
+) -> Optional[Path]:
     """Launch the TUI. Returns the chosen path, or None if cancelled."""
     config = Config.load()
     bookmarks = Bookmarks.load()
@@ -618,6 +626,7 @@ def run_app(start_dir: Optional[Path] = None) -> Optional[Path]:
         bookmarks=bookmarks,
         history=history,
         start_dir=(start_dir or Path.cwd()).resolve(),
+        notice=notice,
     )
     app.run()
     return app.committed_path

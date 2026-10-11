@@ -22,8 +22,11 @@
       the next-step instructions per shell. cmd.exe variant writes
       `%USERPROFILE%\.root\bin\root.cmd` and prepends that dir to the
       user PATH via winreg.
-- [ ] Print a one-line post-install hint after `pip install root-cli`
-      pointing at `root install-shell auto`.
+- [x] ~~Print a one-line post-install hint after `pip install root-cli`~~
+      Not possible (wheels have no post-install hook). Done instead,
+      2026-10-11: a pick that no shell wrapper read with `root which`
+      gets a warning on the next launch, pointing at
+      `root install-shell auto`. Works with every existing wrapper.
 - [x] `root uninstall-shell` for symmetry (find marker block, delete
       it; for cmd, strip the doskey AutoRun entry and root.cmd).
 - [ ] Source the rc/profile automatically when possible (currently we
@@ -124,6 +127,8 @@ Phase 2 (launch memory, later session):
 - **Matthew: optional, low odds** -- if File History or System
   Restore is on, `%LOCALAPPDATA%/root/history.json` -> Properties ->
   Previous Versions may hold a pre-wipe copy.
-- Likely next: Phase 2 (LAUNCH fuzzy-search source), or the pip
-  post-install hint (needs investigation -- wheels lack post-install
-  hooks).
+- Matthew's config now has `search_roots = ["~/Desktop/-=Programming=-/*"]`
+  (set at his request), so typing a project name finds it from anywhere.
+- No-wrapper warning shipped. 118/118 tests green.
+- Likely next: `.gitignore`-aware tree browsing; Phase 2 (LAUNCH
+  source) once there's launch history to rank (none yet).

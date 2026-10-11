@@ -449,3 +449,36 @@ Cleanup: `root forget` on the pytest path, so his recents list only
 real visits. The lost history can't be rebuilt from anything here;
 frecency refills with use. Flagged Previous Versions in TODO as a
 long shot.
+
+## 2026-10-11 — search_roots set; no-wrapper warning
+
+1. At Matthew's request, set `search_roots = ["~/Desktop/-=Programming=-/*"]`
+   in his real config.toml (81 project folders). Checked with the real
+   config: "chess" -> Chess Bruteforcer, "gsweep" -> GitSweep, etc.
+
+2. Warning when root runs without its shell wrapper. The TODO item was
+   a pip post-install hint, which wheels can't do; and what I pitched to
+   Matthew was an env var set by each wrapper. Changed course (noted
+   here per the standing principle): an env var means editing all four
+   wrapper files, re-running install-shell everywhere, and false warnings
+   from every existing install until then, plus keeping the old
+   root.ps1 matchable for the legacy-copy cleanup.
+
+   Instead: every wrapper already calls `root which` after a pick. A
+   pick now also writes `last_target.unread`; `root which` deletes it.
+   If it's still there at the next launch, nothing read the last pick,
+   so the shell never moved, and the TUI shows a yellow notice above the
+   key hints for that whole session (escape-safe, survives refreshes).
+   Each missed pick warns once. Cancelled launches write nothing, so
+   they never warn. Cost: the warning arrives one launch late, never
+   before the first missed pick.
+
+   Checked: tests/test_cli.py (new, 6 tests; the 3 warning ones fail on
+   the old code), plus the real installed root.exe in a throwaway config
+   dir: pick -> flag present; `root which` prints the path and the flag
+   is gone. Real config files hash-identical across the suite run.
+
+   Slip on the way: wrote an f-string patch through a Bash heredoc and
+   the `\n` became a real newline, as the notebook warns. Caught by
+   reading the diff; fixed with Edit. Use the Write tool for patch
+   scripts, every time.

@@ -51,3 +51,13 @@ def target_path() -> Path:
     Lives next to config so the wrapper can find it without env vars.
     """
     return config_dir() / "last_target"
+
+
+def target_unread_path() -> Path:
+    """Flag written with last_target and cleared by ``root which``.
+
+    Every shell wrapper calls ``root which`` after a pick, so if the
+    flag is still there at the next launch, the last pick never reached
+    a wrapper -- the shell didn't cd, and the user should be told.
+    """
+    return config_dir() / "last_target.unread"

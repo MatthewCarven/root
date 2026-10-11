@@ -13,6 +13,9 @@ Subcommands:
 - ``root install-shell SHELL``   Install the wrapper into the rc/profile.
 - ``root uninstall-shell SHELL`` Remove the installed wrapper.
 - ``root which``               Print the last chosen path (for wrappers).
+                               Calling it also marks the pick as read;
+                               a pick nobody read means no wrapper, and
+                               the next launch says so.
 - ``root config``              Show the config file path.
 
 The default invocation prints nothing to stdout on success — the wrapper
@@ -37,6 +40,7 @@ from root_cli.paths import (
     ensure_config_dir,
     history_path,
     target_path,
+    target_unread_path,
 )
 
 
@@ -72,9 +76,31 @@ def _print_shell_wrapper(shell: str) -> int:
     return 0
 
 
+_NO_WRAPPER_NOTICE = (
+    "Your last pick didn't change directory: root's shell wrapper wasn't "
+    "loaded in that shell. Run `root install-shell auto`, then open a new shell."
+)
+
+
 def _write_target(path: Path) -> None:
     ensure_config_dir()
     target_path().write_text(str(path), encoding="utf-8")
+    target_unread_path().touch()  # cleared by `root which`
+
+
+def _take_unread_flag() -> bool:
+    """True if the last pick was never read by a shell wrapper.
+
+    Clears the flag, so each pick that didn't land warns once.
+    """
+    p = target_unread_path()
+    if not p.exists():
+        return False
+    try:
+        p.unlink()
+    except OSError:
+        pass
+    return True
 
 
 def _clear_target() -> None:
@@ -90,6 +116,7 @@ def _cmd_launch(_args: argparse.Namespace) -> int:
     # Defer import so `root --help` and subcommands don't import textual.
     from root_cli.app import run_app
 
+    unread = _take_unread_flag()
     _clear_target()
     try:
         start = Path.cwd()
@@ -98,7 +125,7 @@ def _cmd_launch(_args: argparse.Namespace) -> int:
 
     chosen: Optional[Path] = None
     try:
-        chosen = run_app(start)
+        chosen = run_app(start, notice=_NO_WRAPPER_NOTICE if unread else None)
     except KeyboardInterrupt:
         chosen = None
     except Exception as e:  # pragma: no cover - defensive
@@ -197,6 +224,7 @@ def _cmd_uninstall_shell(args: argparse.Namespace) -> int:
 
 
 def _cmd_which(_args: argparse.Namespace) -> int:
+    _take_unread_flag()  # a wrapper is reading the pick, so it lands
     p = target_path()
     if not p.exists():
         return 1

@@ -86,6 +86,13 @@ Polish pass after first real use:
   first one found on PATH, so `root` can change directory in both. If
   one edition can't be queried, the other is still installed and the
   message says which was skipped.
+- Warns when `root` is used without its shell wrapper. The picker opens
+  either way, but only the wrapper can `cd`. A pick that no wrapper read
+  (via `root which`) gets a yellow notice at the top of the next launch,
+  pointing at `root install-shell auto`. It works with every existing
+  wrapper, so no reinstall is needed, and it warns once per missed pick.
+- Tests: every test now gets a throwaway config dir (autouse fixture).
+  Two TUI tests had been overwriting the real history.json on each run.
 - PowerShell profiles are read and written in their own encoding
   (UTF-16 from Windows PowerShell 5.1's `>>`, UTF-8 with or without
   BOM) instead of assuming UTF-8.

@@ -237,6 +237,11 @@ writes the chosen path to a sentinel file in the config dir, then exits.
 The wrapper reads that file via `root which` and `cd`s. Cancelling (Esc)
 clears the sentinel so the wrapper stays put.
 
+Without the wrapper, `root` still opens the picker, but your shell can't
+move. root notices: a pick that no wrapper read with `root which` gets
+a yellow warning at the top of the next launch, telling you to run
+`root install-shell auto`.
+
 ## License
 
 MIT.
