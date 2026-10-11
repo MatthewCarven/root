@@ -91,6 +91,14 @@ Polish pass after first real use:
   (via `root which`) gets a yellow notice at the top of the next launch,
   pointing at `root install-shell auto`. It works with every existing
   wrapper, so no reinstall is needed, and it warns once per missed pick.
+- Git-ignore-aware browsing. Inside a repo, child folders git ignores
+  are dimmed, tagged `(gitignored)`, and sorted after the rest in the
+  tree; the preview pane does the same for ignored files and folders.
+  They stay searchable. New `gitignored` setting: `"dim"` (default),
+  `"hide"`, or `"show"`. Uses `git check-ignore`, so nested
+  .gitignores, info/exclude, global excludes and tracked files all
+  behave as git says; one call per directory per session, none outside
+  repos, and nothing changes if git isn't installed.
 - Tests: every test now gets a throwaway config dir (autouse fixture).
   Two TUI tests had been overwriting the real history.json on each run.
 - PowerShell profiles are read and written in their own encoding

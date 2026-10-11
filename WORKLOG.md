@@ -482,3 +482,35 @@ long shot.
    the `\n` became a real newline, as the notebook warns. Caught by
    reading the diff; fixed with Edit. Use the Write tool for patch
    scripts, every time.
+
+## 2026-10-11 — Git-ignore-aware tree browsing
+
+TODO said "skip vendored dirs". Surveyed first (read-only): across
+Matthew's 32 repos, `git check-ignore` on top-level dirs hides the
+expected junk (dist x7, build x6, __pycache__ x5, bin/obj, egg-info)
+but also folders he actually uses: the Godot_v4.7.1 editor install in
+GAME and MinerCraft, Chess Bruteforcer's tables/games, SyncPlay's
+music, YPilot's saves/captures, MinerCraft's media/reference. Ignored
+means big or private as often as junk.
+
+So, deviating from "skip" (standing principle): default is "dim" --
+ignored dirs are dimmed, tagged "(gitignored)", and sorted after the
+rest, so clutter sinks but nothing becomes unreachable. Config
+`gitignored = "dim" | "hide" | "show"`; unknown values fall back to
+dim. Search still finds ignored dirs (typing "godot" should work).
+The preview pane applies the same to files and dirs, so ignored
+entries are the first to fall past its 40-row cap.
+
+Mechanism: new root_cli/gitignore.py. Asks git (`check-ignore -z
+--stdin`, dirs passed with a trailing slash so dir-only patterns
+match) instead of parsing .gitignore, so nested files, info/exclude,
+global excludes, negation and tracked-file rules are git's own. One
+call per directory, cached per session on CandidateContext; a cheap
+upward .git check skips git entirely outside repos; no git on PATH ->
+nothing ignored, never retried. Measured: ~40 ms first look in a
+repo, ~13 ms per later keystroke, 2 ms in the (non-repo) projects dir.
+
+Tests 118 -> 131 (tests/test_gitignore.py; real throwaway repos with
+the user's global/system git config shut out). Field check on GAME,
+Chess Bruteforcer, YPilot with the real config: rows as expected.
+Added the documented `gitignored = "dim"` key to Matthew's config.toml.

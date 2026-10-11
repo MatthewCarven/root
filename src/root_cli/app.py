@@ -128,6 +128,8 @@ class _CandidateRow(ListItem):
             return f"[b].[/b]   [dim]commit {c.path}[/dim]"
         if c.is_parent_entry:
             return f"[b]..[/b]  [dim]up to {c.path}[/dim]"
+        if c.source is Source.TREE and c.ignored:
+            return f"[dim]{c.label}/  (gitignored)[/dim]"
         if c.source is Source.TREE:
             return f"{c.label}/  [dim]({c.path.parent})[/dim]"
         return str(c.path)
@@ -138,7 +140,7 @@ class _PreviewRow(ListItem):
 
     def __init__(self, entry: PreviewEntry) -> None:
         self.entry = entry
-        if entry.is_marker:
+        if entry.is_marker or entry.ignored:
             label = f"[dim]{escape(entry.name)}[/dim]"
         else:
             label = escape(entry.name)
@@ -285,7 +287,12 @@ class RootApp(App):
             title.update("")
             pane.clear()
             return
-        self._preview_entries = preview_entries(path, self.config.show_hidden)
+        self._preview_entries = preview_entries(
+            path,
+            self.config.show_hidden,
+            ignored=self.context.ignored_in(path),
+            hide_ignored=self.config.gitignored == "hide",
+        )
         title.update(f"[b]{escape(path.name or str(path))}[/b]")
         pane.clear()
         for entry in self._preview_entries:

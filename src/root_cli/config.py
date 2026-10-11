@@ -34,10 +34,25 @@ recent_limit = 10
 # Whether to show hidden (dot) directories in the tree browser.
 show_hidden = false
 
+# Folders your git repo ignores (build/, dist/, __pycache__/ ...):
+#   "dim"  = show them dimmed, after everything else (default)
+#   "hide" = leave them out of the tree and preview entirely
+#   "show" = treat them like any other folder
+gitignored = "dim"
+
 # Milliseconds the cursor must rest on a row before the preview pane
 # lists it. Keeps holding up/down smooth. 0 = update instantly.
 preview_delay_ms = 333
 """
+
+
+GITIGNORED_MODES = ("dim", "hide", "show")
+
+
+def _gitignored_mode(raw: object) -> str:
+    """Unknown values fall back to the default rather than crashing."""
+    mode = str(raw).strip().lower()
+    return mode if mode in GITIGNORED_MODES else "dim"
 
 
 @dataclass
@@ -47,6 +62,7 @@ class Config:
     recent_limit: int = 10
     show_hidden: bool = False
     preview_delay_ms: int = 333
+    gitignored: str = "dim"
 
     @classmethod
     def load(cls) -> "Config":
@@ -64,6 +80,7 @@ class Config:
             recent_limit=int(data.get("recent_limit", 10)),
             show_hidden=bool(data.get("show_hidden", False)),
             preview_delay_ms=max(0, int(data.get("preview_delay_ms", 333))),
+            gitignored=_gitignored_mode(data.get("gitignored", "dim")),
         )
 
     def save(self) -> None:
@@ -76,6 +93,7 @@ class Config:
                     "recent_limit": self.recent_limit,
                     "show_hidden": self.show_hidden,
                     "preview_delay_ms": self.preview_delay_ms,
+                    "gitignored": self.gitignored,
                 }
             ).encode("utf-8")
         )

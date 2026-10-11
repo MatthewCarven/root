@@ -17,9 +17,10 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import FrozenSet, Iterable, List, Optional
 
 from root_cli.config import Bookmarks, Config
+from root_cli.gitignore import GitIgnoreCache
 from root_cli.history import History
 from root_cli.matcher import score
 
@@ -47,6 +48,7 @@ class Candidate:
     label: str
     score: float = 0.0
     match_fields: List[str] = field(default_factory=list)
+    ignored: bool = False  # tree child that git ignores (shown dimmed)
 
     @property
     def fields(self):
@@ -94,6 +96,7 @@ class PreviewEntry:
     name: str
     path: Optional[Path] = None
     is_dir: bool = False
+    ignored: bool = False  # git ignores it (shown dimmed, sorted last)
 
     @property
     def is_marker(self) -> bool:
@@ -101,7 +104,11 @@ class PreviewEntry:
 
 
 def preview_entries(
-    directory: Path, show_hidden: bool, limit: int = 40
+    directory: Path,
+    show_hidden: bool,
+    limit: int = 40,
+    ignored: FrozenSet[str] = frozenset(),
+    hide_ignored: bool = False,
 ) -> List[PreviewEntry]:
     """First-level contents of *directory*, for the TUI preview pane.
 
@@ -110,6 +117,10 @@ def preview_entries(
     tree browser does. Truncated to *limit* entries with a trailing
     "+N more" marker row. Never raises: unreadable dirs come back as a
     single explanatory marker row.
+
+    Children named in *ignored* (git-ignored) are dropped when
+    *hide_ignored*, otherwise flagged and sorted after the rest of
+    their group, so they're the first to fall past the limit.
     """
     try:
         entries = list(directory.iterdir())
@@ -119,6 +130,8 @@ def preview_entries(
         return [PreviewEntry(name=f"<unreadable: {exc.__class__.__name__}>")]
     if not show_hidden:
         entries = [e for e in entries if not e.name.startswith(".")]
+    if hide_ignored:
+        entries = [e for e in entries if e.name not in ignored]
     dirs: List[Path] = []
     files: List[Path] = []
     for e in entries:
@@ -126,13 +139,16 @@ def preview_entries(
             (dirs if e.is_dir() else files).append(e)
         except OSError:
             files.append(e)
+    def order(p: Path):
+        return (p.name in ignored, p.name.lower())
+
     out = [
-        PreviewEntry(name=d.name + "/", path=d, is_dir=True)
-        for d in sorted(dirs, key=lambda p: p.name.lower())
+        PreviewEntry(name=d.name + "/", path=d, is_dir=True, ignored=d.name in ignored)
+        for d in sorted(dirs, key=order)
     ]
     out += [
-        PreviewEntry(name=f.name, path=f, is_dir=False)
-        for f in sorted(files, key=lambda p: p.name.lower())
+        PreviewEntry(name=f.name, path=f, is_dir=False, ignored=f.name in ignored)
+        for f in sorted(files, key=order)
     ]
     if not out:
         return [PreviewEntry(name="<empty>")]
@@ -174,6 +190,31 @@ class CandidateContext:
     bookmarks: Bookmarks
     history: History
     cwd: Path
+    ignores: GitIgnoreCache = field(default_factory=GitIgnoreCache)
+
+    def ignored_in(self, directory: Path) -> FrozenSet[str]:
+        """Git-ignored child names of *directory*, or nothing when the
+        `gitignored` setting is "show" (so git is never asked)."""
+        if self.config.gitignored == "show":
+            return frozenset()
+        return self.ignores.ignored(directory)
+
+    def _tree(self) -> List[Candidate]:
+        """Tree children of cwd, per the `gitignored` setting: ignored
+        dirs dropped ("hide"), or flagged and moved after the rest
+        ("dim") so the clutter sinks but stays reachable."""
+        children = list(_tree_children(self.cwd, self.config.show_hidden))
+        ignored = self.ignored_in(self.cwd) if children else frozenset()
+        out = [
+            Candidate(path=c, source=Source.TREE, label=c.name)
+            for c in children if c.name not in ignored
+        ]
+        if self.config.gitignored == "dim":
+            out += [
+                Candidate(path=c, source=Source.TREE, label=c.name, ignored=True)
+                for c in children if c.name in ignored
+            ]
+        return out
 
     def collect(self, query):
         if not query:
@@ -203,8 +244,7 @@ class CandidateContext:
                 continue
             out.append(Candidate(path=p, source=Source.RECENT, label=str(p)))
         # Tree children.
-        for child in _tree_children(self.cwd, self.config.show_hidden):
-            out.append(Candidate(path=child, source=Source.TREE, label=child.name))
+        out.extend(self._tree())
         return out
 
     def _search(self, query):
@@ -220,8 +260,7 @@ class CandidateContext:
             ))
         for p, _s in self.history.ranked():
             pool.append(Candidate(path=p, source=Source.RECENT, label=str(p)))
-        for child in _tree_children(self.cwd, self.config.show_hidden):
-            pool.append(Candidate(path=child, source=Source.TREE, label=child.name))
+        pool.extend(self._tree())
         for m in _glob_search_roots(self.config.expanded_search_roots()):
             pool.append(Candidate(path=m, source=Source.SEARCH, label=m.name))
 

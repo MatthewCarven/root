@@ -4,7 +4,11 @@
 
 - [x] Preview pane: show first-level contents of the highlighted dir on
       the right side of the UI (Textual makes this easy).
-- [ ] `.gitignore`-aware tree browsing (skip vendored dirs).
+- [x] `.gitignore`-aware tree browsing (2026-10-11). Ignored dirs are
+      dimmed and sorted last by default rather than skipped, because a
+      survey of Matthew's 32 repos found many ignored dirs are ones he
+      visits (Godot install, chess tables, saves, music).
+      `gitignored = "hide"` skips them; `"show"` turns it off.
 - [ ] Multi-level glob: today search roots are one level deep
       (`~/code/*`); allow `~/code/**` with sensible depth limits and
       caching.
@@ -129,6 +133,7 @@ Phase 2 (launch memory, later session):
   Previous Versions may hold a pre-wipe copy.
 - Matthew's config now has `search_roots = ["~/Desktop/-=Programming=-/*"]`
   (set at his request), so typing a project name finds it from anywhere.
-- No-wrapper warning shipped. 118/118 tests green.
-- Likely next: `.gitignore`-aware tree browsing; Phase 2 (LAUNCH
-  source) once there's launch history to rank (none yet).
+- No-wrapper warning shipped.
+- Git-ignore-aware browsing shipped (dim by default). 131/131 green.
+- Likely next: Phase 2 (LAUNCH source) once there's launch history
+  to rank (none yet); theme support; the symlink-resolve flag.

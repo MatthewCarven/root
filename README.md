@@ -139,6 +139,11 @@ The default cursor position is smart:
 
 - Type to fuzzy-filter. All four sources merge into one ranked list.
   (The synthetic `.` and `..` rows disappear while you're filtering.)
+- Inside a git repo, folders the repo ignores (`build/`, `dist/`,
+  `__pycache__/` ...) are dimmed, marked `(gitignored)`, and listed
+  after everything else, so the clutter sinks without disappearing
+  (plenty of ignored folders are ones you visit: data, saves, an
+  editor install). Set `gitignored = "hide"` to drop them instead.
 - ↑/↓ to move. **Enter** commits the highlighted entry and `cd`s there.
 - **→** (or **Shift+Enter**) descends into the highlighted directory
   (browse without committing); **←** goes up one level (same as Enter
@@ -219,6 +224,9 @@ show_hidden = false
 # How long (ms) the cursor must rest before the preview pane updates.
 # 0 = update instantly.
 preview_delay_ms = 333
+
+# Folders a git repo ignores: "dim" (sink + dim, default), "hide", or "show".
+gitignored = "dim"
 ```
 
 `bookmarks.toml`:
