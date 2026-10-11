@@ -313,3 +313,22 @@ dir is %APPDATA%; platformdirs (non-roaming) actually puts it under
 
 Tests 91 -> 94: zero-delay instant preview, config default/roundtrip,
 missing-key default and negative clamp.
+
+## 2026-10-11 — Docs pass
+
+Matthew asked for the docs and README to be brought up to date.
+Checked each README claim against the code (icons, subcommands,
+config path, preview cap) and fixed what had drifted:
+
+- README: new Uninstall section (`uninstall-shell` was never
+  mentioned); ←/→ described as edge-only while typing (changed
+  2026-09-20, README still said they always navigate); `forget [PATH]`
+  and the shell subcommands added to the subcommand list; preview
+  section rewritten around the delay and the 40-entry cap.
+- TODO: preview delay ticked; the pane field-test item ticked (done
+  2026-09-20, per the worklog); UI-test limitation reworded (15 pilot
+  tests now); the June "State" section replaced with today's.
+- CHANGELOG: setting and doc fixes recorded under Unreleased.
+
+Both earlier commits today were already pushed by Matthew when this
+pass started (main level with origin at a8d00db).

@@ -78,6 +78,19 @@ you need to allow signed local scripts once per user:
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
+### Uninstall
+
+```sh
+root uninstall-shell auto        # or bash / zsh / fish / powershell / cmd
+pip uninstall root-cli
+```
+
+`uninstall-shell` removes exactly what `install-shell` added: the marked
+block in your rc file or `$PROFILE`, the fish function file, or (for
+cmd.exe) the doskey AutoRun entry and `root.cmd`. It's safe to re-run
+and reports what it found. Open a new shell afterwards; the current one
+still has the old function loaded.
+
 ## Use
 
 Just type `root` from anywhere. A list appears:
@@ -118,7 +131,9 @@ The default cursor position is smart:
 - ↑/↓ to move. **Enter** commits the highlighted entry and `cd`s there.
 - **→** (or **Shift+Enter**) descends into the highlighted directory
   (browse without committing); **←** goes up one level (same as Enter
-  on `..`).
+  on `..`). While you're typing, ← and → edit the search text as usual
+  and only navigate from the edges: ← with the cursor at the start of
+  the box, → with it at the end. Shift+Enter always descends.
 - **Ctrl+B** bookmarks the highlighted dir (asks for a name).
 - **Ctrl+D** deletes the highlighted entry — removes a bookmark (`*` row)
   or forgets a recent (`~` row), depending on what's highlighted.
@@ -127,11 +142,17 @@ The default cursor position is smart:
 
 ### The preview pane
 
-The right-hand pane always shows the first-level contents of whatever
-directory is highlighted. While you move the cursor it waits until
-the cursor rests for a third of a second before listing, so holding
-↑/↓ stays smooth (Tab skips the wait; tune it with `preview_delay_ms`
-in `config.toml`). It's interactive:
+The right-hand pane shows the first-level contents of whatever
+directory is highlighted: folders first, up to 40 entries, then a
+`… +N more` row.
+
+When you move the cursor, the pane waits until it has rested for a
+third of a second before listing the new folder, so holding ↑/↓ stays
+smooth. Typing and navigating update it straight away, and Tab never
+makes you wait. Set `preview_delay_ms` in `config.toml` to change the
+delay (`0` updates instantly).
+
+It's interactive:
 
 - **Tab** moves focus into the pane (Tab again, **Shift+Tab**, or **←**
   goes back to the search box).
@@ -152,8 +173,12 @@ root add work ~/code/big-project   # add a bookmark (default: cwd)
 root rm work                       # remove a bookmark
 root ls                            # list bookmarks
 root recent                        # list frecent directories
-root forget                        # remove cwd from history
+root forget [PATH]                 # remove a dir from history (default: cwd)
 root config                        # show config / bookmark / history paths
+root install-shell SHELL           # wire the cd wrapper into your shell
+root uninstall-shell SHELL         # remove it again
+root init-shell SHELL              # print the wrapper instead of installing
+root --version
 ```
 
 ## Configuration

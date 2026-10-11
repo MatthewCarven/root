@@ -29,6 +29,9 @@
 - [ ] Source the rc/profile automatically when possible (currently we
       print the `source` command for the user to run — there's no
       portable way to mutate the parent shell from Python).
+- [x] Preview pane waits for the cursor to rest before listing (333ms
+      debounce), so holding up/down stays smooth. Tunable via
+      `preview_delay_ms` in config.toml; 0 = instant. (2026-10-11)
 
 ## Planned — Tab-able preview pane (designed with Matthew, 2026-09-20)
 
@@ -62,8 +65,9 @@ Phase 1 (the pane itself) — DONE 2026-09-20:
 - [x] Docstring key table, status/footer hints, README key list.
 - [x] Pilot-harness tests: tab focus, enter-on-dir commit,
       shift+enter descend, file-launch stays open (launcher mocked).
-- [ ] Matthew: field-test the pane on Windows Terminal (Tab in, launch
-      a file, Shift+Enter drill-down) — pilot tests can't see rendering.
+- [x] Matthew: field-test the pane on Windows Terminal (Tab in, launch
+      a file, Shift+Enter drill-down). Done 2026-09-20; the one report
+      that came out of it was a false alarm (see worklog).
 
 Phase 2 (launch memory, later session):
 
@@ -96,19 +100,19 @@ Phase 2 (launch memory, later session):
 - The tree browser dereferences symlinks at display time, which may
   surprise users on macOS (`~/Documents` → `~/Library/...`). Consider
   a config flag to disable resolve().
-- ~~No tests yet for the Textual UI itself~~ First pilot-harness tests
-  landed (arrow-key edge navigation); coverage of the UI is still thin.
+- UI tests (Textual pilot harness, 15 of them) cover arrow-key edge
+  navigation, the interactive preview pane, and the preview delay.
+  They can't see rendering, so layout and focus styling still need a
+  look by eye after UI changes.
 
-## State at 2026-06-11 (second session)
+## State at 2026-10-11
 
-- Preview pane field-tested by Matthew on Windows Terminal: approved
-  as-is, no polish requested. It already caught one mis-set bookmark.
-- `root uninstall-shell` implemented and committed. 74/74 tests green.
-- **Matthew: push** -- unpushed commits on main (housekeeping, preview
-  pane, uninstall-shell).
-- **Matthew: optional field check** -- run `root uninstall-shell cmd`
-  then `root install-shell cmd` to confirm the AutoRun roundtrip on
-  real Windows (sandbox tests mock winreg paths only at the merge/
-  unmerge string level).
-- Likely next: pip post-install hint (needs investigation -- wheels
-  lack post-install hooks) or `.gitignore`-aware tree browsing.
+- Preview delay shipped (333ms debounce + `preview_delay_ms` setting).
+  94/94 tests green. main is pushed and level with origin.
+- **Matthew: try the delay by feel.** Holding up/down should keep the
+  list smooth and the pane should catch up once you stop. If 333 feels
+  off, change `preview_delay_ms` in
+  `%LOCALAPPDATA%/root/config.toml`.
+- Likely next: the PowerShell uninstall bug above, Phase 2 (LAUNCH
+  fuzzy-search source), or the pip post-install hint (needs
+  investigation -- wheels lack post-install hooks).

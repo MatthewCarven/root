@@ -62,8 +62,12 @@ Polish pass after first real use:
   arrow keys crashing on textual 0.71.0 (found when the dev machine's
   environment drifted to py3.14 + textual 0.71.0).
 - Preview pane is debounced on cursor moves: it rebuilds once the
-  results cursor has rested for 333ms (`preview_delay_ms` in
-  config.toml; 0 restores instant updates), so a
-  held ↑/↓ no longer lists every directory on the way past. Typing and
-  navigating still update it at once; Tab flushes a pending update so
-  you never step into a stale listing.
+  results cursor has rested for 333ms, so a held ↑/↓ no longer lists
+  every directory on the way past. Typing and navigating still update
+  it at once; Tab flushes a pending update so you never step into a
+  stale listing.
+- New `preview_delay_ms` config setting (default 333) for that delay;
+  `0` restores instant updates. Config files without it get the default.
+- Docs: the Windows config directory is `%LOCALAPPDATA%\root\`, not
+  `%APPDATA%`; README now covers `uninstall-shell`, `forget [PATH]`, and
+  the edge-only behaviour of ←/→ while typing.
